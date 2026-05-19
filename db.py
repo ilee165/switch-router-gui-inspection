@@ -37,11 +37,19 @@ def init_db ():
 
         cur = conn.execute("SELECT COUNT(*) FROM users")
         if cur.fetchone()[0] == 0:
-            hashed = bcrypt.hashpw("admin".encode(), bcrypt.gensalt())
+            hashed = bcrypt.hashpw("admin".encode(), bcrypt.gensalt()).decode()
             conn.execute(
                 "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                ("admin", hashed , "admin"),
+                ("admin", hashed, "admin"),
             )
+        else:
+            # Repair passwords stored as BLOB (bytes) by the old seed — decode to str
+            for row in conn.execute("SELECT id, password FROM users").fetchall():
+                if isinstance(row["password"], bytes):
+                    conn.execute(
+                        "UPDATE users SET password = ? WHERE id = ?",
+                        (row["password"].decode(), row["id"]),
+                    )
 
 # ── User functions ─────────────────────────────────────────────────────────────
 
