@@ -45,15 +45,13 @@ def init_db ():
 
 # ── User functions ─────────────────────────────────────────────────────────────
 
-def verify_user (username: str, password: str):
+def verify_user(username: str, password: str):
+    """Return user row if credentials valid, else None."""
     with get_conn() as conn:
         row = conn.execute(
             "SELECT * FROM users WHERE username = ?", (username,)
         ).fetchone()
-    if row and bcrypt.checkpw(
-            password.encode(),
-            row["password"].encode()
-        ):
+    if row and bcrypt.checkpw(password.encode(), row["password"].encode()):
         return dict(row)
     return None
 

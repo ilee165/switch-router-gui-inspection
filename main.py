@@ -21,8 +21,8 @@ from panels import InterfacesPanel, RoutingPanel, NeighborPanel, ArpMacPanel, Cl
 class LoginDialog(QDialog):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Net Inspector — Login")
-        self.setFixedSize(380, 300)
+        self.setWindowTitle("RemoteIn — Login")
+        self.setFixedSize(480, 400)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.current_user = None
         self._build_ui()
@@ -32,7 +32,7 @@ class LoginDialog(QDialog):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(16)
 
-        title = QLabel("NET INSPECTOR")
+        title = QLabel("REMOTEIN")
         title.setObjectName("loginTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         sub = QLabel("NETWORK OPERATIONS TOOL")
@@ -43,7 +43,7 @@ class LoginDialog(QDialog):
 
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("color: #2D2D35;")
+        sep.setObjectName("loginSep")
         layout.addWidget(sep)
 
         form = QFormLayout()
@@ -95,7 +95,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._user = user
         self._selected_device = None
-        self.setWindowTitle("Net Inspector")
+        self.setWindowTitle("RemoteIn")
         self.setMinimumSize(1200, 720)
         self._build_menu()
         self._build_ui()
@@ -103,12 +103,6 @@ class MainWindow(QMainWindow):
 
     def _build_menu(self):
         menu = self.menuBar()
-        menu.setStyleSheet("""
-            QMenuBar { background: #0D0D0F; color: #D4D0C8; padding: 2px; }
-            QMenuBar::item:selected { background: #1E1E28; color: #F59E0B; }
-            QMenu { background: #1A1A1E; border: 1px solid #2D2D35; color: #D4D0C8; }
-            QMenu::item:selected { background: #1E2A1A; color: #F59E0B; }
-        """)
         file_menu = menu.addMenu("File")
         dev_action = QAction("Device Manager", self)
         dev_action.triggered.connect(self._open_device_manager)
@@ -134,13 +128,13 @@ class MainWindow(QMainWindow):
         # ── Left sidebar: device list ──────────────────────────────────────────
         sidebar = QWidget()
         sidebar.setFixedWidth(240)
-        sidebar.setStyleSheet("background: #111114; border-right: 1px solid #2D2D35;")
+        sidebar.setObjectName("sidebar")
         sv = QVBoxLayout(sidebar)
         sv.setContentsMargins(12, 16, 12, 12)
         sv.setSpacing(8)
 
         user_lbl = QLabel(f"  ● {self._user['username'].upper()}  [{self._user['role']}]")
-        user_lbl.setStyleSheet("color: #10B981; font-size: 10px; letter-spacing: 1px;")
+        user_lbl.setObjectName("userBadge")
         sv.addWidget(user_lbl)
 
         hdr = QLabel("DEVICES")

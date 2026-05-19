@@ -276,4 +276,42 @@ QGroupBox::title {
     padding: 0 4px;
     color: #F59E0B;
 }
+
+/* ── Menu bar ─────────────────────────────────────────────────────────────── */
+QMenuBar {
+    background: #0D0D0F;
+    color: #D4D0C8;
+    padding: 2px;
+}
+QMenuBar::item:selected {
+    background: #1E1E28;
+    color: #F59E0B;
+}
+QMenu {
+    background: #1A1A1E;
+    border: 1px solid #2D2D35;
+    color: #D4D0C8;
+}
+QMenu::item:selected {
+    background: #1E2A1A;
+    color: #F59E0B;
+}
+
+/* ── Login separator ──────────────────────────────────────────────────────── */
+QFrame#loginSep {
+    color: #2D2D35;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────────── */
+QWidget#sidebar {
+    background: #111114;
+    border-right: 1px solid #2D2D35;
+}
+
+/* ── User badge ───────────────────────────────────────────────────────────── */
+QLabel#userBadge {
+    color: #10B981;
+    font-size: 10px;
+    letter-spacing: 1px;
+}
 """
