@@ -24,7 +24,7 @@ explain what code is doing and why, not just fix it silently.
 | Structured parsing | pyATS + Genie (Linux/Mac only) |
 | SSH / CLI fallback | Netmiko |
 | App authentication | bcrypt + SQLite |
-| Device inventory | SQLite (~/.net_inspector/data.db) |
+| Device inventory | SQLite (`~/.switch_router_gui/data.db`) |
 
 > **Windows note:** pyATS and Genie are Linux/Mac only. On Windows, the app
 > runs entirely on Netmiko and returns raw CLI output. This is expected behavior
@@ -36,7 +36,7 @@ explain what code is doing and why, not just fix it silently.
 ## Project structure
 
 ```
-net-inspector/
+switch-router-gui-inspection/
 ├── main.py              # App entry point, login dialog, main window
 ├── db.py                # SQLite — users and device inventory
 ├── connector.py         # pyATS/Genie + Netmiko connection logic
@@ -157,7 +157,10 @@ python main.py
 1. **Never rewrite whole files** — always use targeted edits. Show what changed
    and explain why.
 
-2. **Never touch `styles.py`** — the dark theme is intentional and final.
+2. **`styles.py` rules** — never change existing colors, fonts, or rules. You
+   MAY add new named selectors (e.g. `QLabel#myWidget`) when a new widget needs
+   styling. Always use `objectName` on the widget and a matching `#name` selector
+   in QSS — never call `setStyleSheet()` inline on individual widgets.
 
 3. **Explain changes as you make them** — the owner is learning to code.
    After every edit, explain what changed, where it fits in the architecture,
@@ -182,3 +185,63 @@ python main.py
 
 9. **When in doubt about structure** — re-read this file and the architecture
    rules above before making changes.
+
+---
+
+## What has been fixed (session log)
+
+| File | Fix |
+|---|---|
+| `user_manager.py` | File was missing `.py` extension — Python could not import it; `_manage_users()` in `main.py` would crash at runtime |
+| `db.py` | `init_db` stored the bcrypt seed hash as `bytes` (BLOB), but `verify_user` called `.encode()` on it assuming `str` — caused `AttributeError` on every login attempt with the default `admin` account. Fixed by adding `.decode()` to the seed. Added a repair pass to fix existing DBs on next startup. |
+| `main.py` | Four inline `setStyleSheet()` calls violated the "all styles in `styles.py`" rule. Replaced with `setObjectName()` calls and matching selectors in `styles.py`. |
+| `styles.py` | Added `QMenuBar`, `QMenu`, `#loginSep`, `#sidebar`, `#userBadge` selectors to cover the widgets previously styled inline. |
+| `requirements.txt` | Added `pyats` and `genie` as commented-out entries with a Linux/Mac-only note. |
+| `CLAUDE.md` | Corrected app name ("Net Inspector" → "RemoteIn"), DB path, and project structure header. |
+
+---
+
+## Roadmap
+
+### Bugs to fix next
+
+- **`connector.py:71`** — `Any` is used in the type hint for `run_in_thread` but
+  never imported from `typing`. Add `Any` to the import on line 3. Not a runtime
+  crash (protected by `from __future__ import annotations`) but will fail `mypy`.
+
+- **`connector.py:41`** — `_genie_testbed` has `junos` missing from `os_map`.
+  Juniper devices fall back to `"ios"` when using Genie on Linux/Mac, which is
+  wrong. Add `"junos": "junos"` to that dict.
+
+### Quality improvements
+
+- **`connector.py` — eliminate duplication.** Every `get_*` function is the same
+  Genie-try → Netmiko-fallback pattern copy-pasted six times. Extract a shared
+  `_fetch(device, genie_cmd, netmiko_cmd)` helper. Cuts the file by ~60 lines and
+  means any future fix (e.g. timeout handling) only needs to be made once.
+
+- **`connector.py` — Genie reconnects on every fetch.** Each panel button click
+  opens a fresh SSH session. Consider caching the Genie `dev` object on the
+  device dict or in a module-level dict keyed by device ID, and disconnecting on
+  device change.
+
+- **`db.py` — device passwords stored in plaintext.** User account passwords are
+  bcrypt-hashed correctly, but SSH device credentials sit in plaintext SQLite.
+  For a local tool this is acceptable, but worth flagging. A future improvement
+  would encrypt them with a key derived from the logged-in user's password.
+
+### Features to add
+
+- **Connection health check** — a "Test Connection" button in `device_manager.py`
+  that runs a quick SSH connect + `show version` before saving a device.
+
+- **Export to CSV/clipboard** — a right-click or toolbar button on each panel
+  table to copy the visible data. Useful for pasting into tickets.
+
+- **SSH host key verification** — currently Netmiko uses `ConnectHandler` with
+  default settings, which may auto-accept unknown host keys. A known_hosts check
+  or first-connect prompt would improve security.
+
+- **Operator role enforcement** — the `role` column exists in the DB but the UI
+  does not restrict operators from any actions beyond hiding the Admin menu.
+  Consider disabling the CLI panel's free-form send for `operator` users.
