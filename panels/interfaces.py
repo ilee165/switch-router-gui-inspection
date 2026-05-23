@@ -32,6 +32,11 @@ class InterfacesPanel(BasePanel):
             self.status_message.emit("Raw CLI output (Genie parser unavailable).")
             return
 
+        if data["source"] == "textfsm":
+            self._populate_textfsm(data["data"])
+            return
+
+        # Genie structured path
         ifaces = data["data"]
         self.table.setRowCount(len(ifaces))
         for row, (name, info) in enumerate(ifaces.items()):
@@ -53,3 +58,20 @@ class InterfacesPanel(BasePanel):
             set_cell(self.table, row, 6, desc)
 
         self.status_message.emit(f"Fetched {len(ifaces)} interfaces.")
+
+    def _populate_textfsm(self, rows: list):
+        self.table.setRowCount(len(rows))
+        for r, iface in enumerate(rows):
+            status = iface.get("link_status", "")
+            proto  = iface.get("protocol_status", "")
+            color  = "#10B981" if "up" in status.lower() else "#EF4444"
+
+            set_cell(self.table, r, 0, iface.get("interface", ""))
+            set_cell(self.table, r, 1, status, color)
+            set_cell(self.table, r, 2, proto)
+            set_cell(self.table, r, 3, iface.get("ip_address", ""))
+            set_cell(self.table, r, 4, iface.get("speed", ""))
+            set_cell(self.table, r, 5, iface.get("duplex", ""))
+            set_cell(self.table, r, 6, iface.get("description", ""))
+
+        self.status_message.emit(f"Fetched {len(rows)} interfaces via TextFSM.")

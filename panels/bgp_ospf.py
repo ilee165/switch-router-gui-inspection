@@ -55,6 +55,12 @@ class NeighborPanel(BasePanel):
 
     def _on_result(self, data):
         self.raw.clear()
+        if data["source"] == "textfsm":
+            import json
+            self.raw.setPlainText(json.dumps(data["data"], indent=2))
+            self.status_message.emit("TextFSM parsed output.")
+            return
+
         if data["source"] == "raw":
             self.raw.setPlainText(data["data"])
             return

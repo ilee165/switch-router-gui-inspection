@@ -25,13 +25,17 @@ PLATFORM_MAP = {
 def _netmiko_device(device: dict) -> dict:
     """Build Netmiko connection dict from device record."""
     return {
-        "device_type": PLATFORM_MAP.get(device["platform"], "cisco_ios"),
-        "host":        device["hostname"],
-        "port":        device.get("port", 22),
-        "username":    device["username"],
-        "password":    device["password"],
-        "secret":      device.get("enable_pass", ""),
-        "timeout":     15,
+        "device_type":      PLATFORM_MAP.get(device["platform"], "cisco_ios"),
+        "host":             device["hostname"],
+        "port":             device.get("port", 22),
+        "username":         device["username"],
+        "password":         device["password"],
+        "secret":           device.get("enable_pass", ""),
+        "timeout":          15,
+        "ssh_strict":       False,
+        "system_host_keys": False,
+        "use_keys":         False,
+        "key_file":         None,
     }
  
  
@@ -96,8 +100,8 @@ def get_interfaces(device: dict) -> dict:
             pass  # fall through to Netmiko
     with ConnectHandler(**_netmiko_device(device)) as conn:
         conn.enable()
-        output = conn.send_command("show interfaces")
-    return {"source": "raw", "data": output}
+        output = conn.send_command("show interfaces", use_textfsm=True)
+    return {"source": "textfsm", "data": output}
  
  
 def get_routing_table(device: dict) -> dict:
@@ -113,8 +117,8 @@ def get_routing_table(device: dict) -> dict:
             pass
     with ConnectHandler(**_netmiko_device(device)) as conn:
         conn.enable()
-        output = conn.send_command("show ip route")
-    return {"source": "raw", "data": output}
+        output = conn.send_command("show ip route", use_textfsm=True)
+    return {"source": "textfsm", "data": output}
  
  
 def get_bgp_neighbors(device: dict) -> dict:
@@ -130,8 +134,8 @@ def get_bgp_neighbors(device: dict) -> dict:
             pass
     with ConnectHandler(**_netmiko_device(device)) as conn:
         conn.enable()
-        output = conn.send_command("show ip bgp neighbors")
-    return {"source": "raw", "data": output}
+        output = conn.send_command("show ip bgp neighbors", use_textfsm=True)
+    return {"source": "textfsm", "data": output}
  
  
 def get_ospf_neighbors(device: dict) -> dict:
@@ -147,8 +151,8 @@ def get_ospf_neighbors(device: dict) -> dict:
             pass
     with ConnectHandler(**_netmiko_device(device)) as conn:
         conn.enable()
-        output = conn.send_command("show ip ospf neighbor")
-    return {"source": "raw", "data": output}
+        output = conn.send_command("show ip ospf neighbor", use_textfsm=True)
+    return {"source": "textfsm", "data": output}
  
  
 def get_arp_table(device: dict) -> dict:
@@ -164,8 +168,8 @@ def get_arp_table(device: dict) -> dict:
             pass
     with ConnectHandler(**_netmiko_device(device)) as conn:
         conn.enable()
-        output = conn.send_command("show ip arp")
-    return {"source": "raw", "data": output}
+        output = conn.send_command("show ip arp", use_textfsm=True)
+    return {"source": "textfsm", "data": output}
  
  
 def get_mac_table(device: dict) -> dict:
@@ -181,8 +185,8 @@ def get_mac_table(device: dict) -> dict:
             pass
     with ConnectHandler(**_netmiko_device(device)) as conn:
         conn.enable()
-        output = conn.send_command("show mac address-table")
-    return {"source": "raw", "data": output}
+        output = conn.send_command("show mac address-table", use_textfsm=True)
+    return {"source": "textfsm", "data": output}
  
  
 def run_cli_command(device: dict, command: str) -> str:
