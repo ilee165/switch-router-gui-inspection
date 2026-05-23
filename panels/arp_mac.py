@@ -46,19 +46,45 @@ class ArpMacPanel(BasePanel):
 
     def _on_result(self, data):
         self.raw.clear()
-        if data["source"] == "textfsm":
-            import json
-            self.raw.setPlainText(json.dumps(data["data"], indent=2))
-            self.status_message.emit("TextFSM parsed output.")
-            return
 
         if data["source"] == "raw":
             self.raw.setPlainText(data["data"])
             return
+
+        if data["source"] == "textfsm":
+            if self.proto_combo.currentText() == "ARP":
+                self._populate_arp_textfsm(data["data"])
+            else:
+                self._populate_mac_textfsm(data["data"])
+            return
+
+        # Genie path
         if self.proto_combo.currentText() == "ARP":
             self._populate_arp(data["data"])
         else:
             self._populate_mac(data["data"])
+
+    def _populate_arp_textfsm(self, rows: list):
+        self.arp_table.setRowCount(len(rows))
+        for r, entry in enumerate(rows):
+            set_cell(self.arp_table, r, 0, entry.get("protocol", ""))
+            set_cell(self.arp_table, r, 1, entry.get("ip_address", ""))
+            set_cell(self.arp_table, r, 2, entry.get("age", ""))
+            set_cell(self.arp_table, r, 3, entry.get("mac_address", ""))
+            set_cell(self.arp_table, r, 4, entry.get("type", ""))
+            set_cell(self.arp_table, r, 5, entry.get("interface", ""))
+
+        self.status_message.emit(f"Fetched {len(rows)} ARP entries via TextFSM.")
+
+    def _populate_mac_textfsm(self, rows: list):
+        self.mac_table.setRowCount(len(rows))
+        for r, entry in enumerate(rows):
+            set_cell(self.mac_table, r, 0, entry.get("vlan", ""))
+            set_cell(self.mac_table, r, 1, entry.get("mac_address", ""))
+            set_cell(self.mac_table, r, 2, entry.get("type", ""))
+            set_cell(self.mac_table, r, 3, entry.get("port", ""))
+
+        self.status_message.emit(f"Fetched {len(rows)} MAC entries via TextFSM.")
 
     def _populate_arp(self, parsed: dict):
         rows = []

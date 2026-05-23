@@ -25,7 +25,7 @@ class NeighborPanel(BasePanel):
         layout.addLayout(proto_row)
 
         self.bgp_table = make_table([
-            "Neighbor", "AS", "State", "Up/Down", "Prefixes Rx", "Description"
+            "Neighbor", "AS", "State", "Router ID", "Remote IP", "VRF"
         ])
         self.ospf_table = make_table([
             "Neighbor ID", "Priority", "State", "Dead Timer", "Interface", "Address"
@@ -55,19 +55,50 @@ class NeighborPanel(BasePanel):
 
     def _on_result(self, data):
         self.raw.clear()
-        if data["source"] == "textfsm":
-            import json
-            self.raw.setPlainText(json.dumps(data["data"], indent=2))
-            self.status_message.emit("TextFSM parsed output.")
-            return
 
         if data["source"] == "raw":
             self.raw.setPlainText(data["data"])
             return
+
+        if data["source"] == "textfsm":
+            if self.proto_combo.currentText() == "BGP":
+                self._populate_bgp_textfsm(data["data"])
+            else:
+                self._populate_ospf_textfsm(data["data"])
+            return
+
+        # Genie path
         if self.proto_combo.currentText() == "BGP":
             self._populate_bgp(data["data"])
         else:
             self._populate_ospf(data["data"])
+
+    def _populate_bgp_textfsm(self, rows: list):
+        self.bgp_table.setRowCount(len(rows))
+        for r, nbr in enumerate(rows):
+            state = nbr.get("bgp_state", "")
+            color = BGP_STATE_COLORS.get(state, None)
+
+            set_cell(self.bgp_table, r, 0, nbr.get("neighbor", ""))
+            set_cell(self.bgp_table, r, 1, nbr.get("remote_as", ""))
+            set_cell(self.bgp_table, r, 2, state, color)
+            set_cell(self.bgp_table, r, 3, nbr.get("remote_router_id", ""))
+            set_cell(self.bgp_table, r, 4, nbr.get("remote_ip", ""))
+            set_cell(self.bgp_table, r, 5, nbr.get("vrf", "default"))
+
+        self.status_message.emit(f"Fetched {len(rows)} BGP neighbors via TextFSM.")
+
+    def _populate_ospf_textfsm(self, rows: list):
+        self.ospf_table.setRowCount(len(rows))
+        for r, nbr in enumerate(rows):
+            set_cell(self.ospf_table, r, 0, nbr.get("neighbor_id", ""))
+            set_cell(self.ospf_table, r, 1, nbr.get("priority", ""))
+            set_cell(self.ospf_table, r, 2, nbr.get("state", ""))
+            set_cell(self.ospf_table, r, 3, nbr.get("dead_time", ""))
+            set_cell(self.ospf_table, r, 4, nbr.get("interface", ""))
+            set_cell(self.ospf_table, r, 5, nbr.get("address", ""))
+
+        self.status_message.emit(f"Fetched {len(rows)} OSPF neighbors via TextFSM.")
 
     def _populate_bgp(self, parsed: dict):
         rows = []
