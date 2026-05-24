@@ -223,16 +223,11 @@ python main.py
 | `panels/routing.py` | Added `_populate_textfsm()` to render NTC route entries. Handles `network`/`prefix_length` merge into CIDR notation. |
 | `panels/bgp_ospf.py` | Added `_populate_bgp_textfsm()` and `_populate_ospf_textfsm()`. BGP table columns updated to match NTC field names: Neighbor, AS, State, Router ID, Remote IP, VRF. |
 | `panels/arp_mac.py` | Added `_populate_arp_textfsm()` and `_populate_mac_textfsm()`. |
+| `connector.py` | Added `"junos": "junos"` to `_genie_testbed` `os_map` — Juniper devices were silently falling back to `"ios"` when Genie was used on Linux/Mac. |
 
 ---
 
 ## Roadmap
-
-### Bugs to fix next
-
-- **`connector.py` — `junos` missing from `_genie_testbed` `os_map`.** Juniper
-  devices fall back to `"ios"` when using Genie on Linux/Mac, which is wrong.
-  Add `"junos": "junos"` to the `os_map` dict on line 49.
 
 ### Quality improvements
 

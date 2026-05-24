@@ -46,7 +46,7 @@ def _netmiko_device(device: dict) -> dict:
 def _genie_testbed(device: dict) -> dict:
     """Build minimal pyATS testbed dict for a single device."""
     plat = device["platform"]
-    os_map = {"ios": "ios", "iosxe": "iosxe", "iosxr": "iosxr", "nxos": "nxos", "eos": "eos"}
+    os_map = {"ios": "ios", "iosxe": "iosxe", "iosxr": "iosxr", "nxos": "nxos", "eos": "eos", "junos": "junos"}
     return {
         "devices": {
             device["name"]: {
