@@ -21,15 +21,17 @@ explain what code is doing and why, not just fix it silently.
 | Layer | Tool |
 |---|---|
 | GUI framework | PyQt6 |
-| Structured parsing | pyATS + Genie (Linux/Mac only) |
-| SSH / CLI fallback | Netmiko |
+| Structured parsing (Linux/Mac) | pyATS + Genie |
+| Structured parsing (all OS) | Netmiko + ntc-templates (TextFSM) |
+| SSH / CLI fallback | Netmiko (raw string when no template matches) |
 | App authentication | bcrypt + SQLite |
 | Device inventory | SQLite (`~/.switch_router_gui/data.db`) |
 
 > **Windows note:** pyATS and Genie are Linux/Mac only. On Windows, the app
-> runs entirely on Netmiko and returns raw CLI output. This is expected behavior
-> — the code handles it automatically via the `GENIE_AVAILABLE` flag in
-> `connector.py`.
+> uses Netmiko with TextFSM via `ntc-templates` — this returns structured data
+> for most standard `show` commands. Raw CLI output is the final fallback when
+> no NTC template exists for the command/platform combo. The `GENIE_AVAILABLE`
+> flag in `connector.py` controls which path runs.
 
 ---
 
@@ -64,11 +66,26 @@ switch-router-gui-inspection/
 - `main.py` calls `db.py` for device data and passes dicts to panels
 - `connector.py` has no knowledge of the GUI
 
-**Two-path pattern in `connector.py`:**
-Every fetch function tries Genie first (structured data), falls back to
-Netmiko (raw CLI) if Genie is unavailable or the parser doesn't exist.
-Returns `{"source": "genie", "data": ...}` or `{"source": "raw", "data": ...}`.
-Panels check `data["source"]` to decide whether to render a table or raw text.
+**Three-path pattern in `connector.py`:**
+Every fetch function tries Genie first, then Netmiko+TextFSM, then raw CLI.
+All public `get_*` functions return `{"source": <sentinel>, "data": <payload>}`.
+
+| `source` | `data` type | When |
+|---|---|---|
+| `"genie"` | `dict` (nested) | Genie parsed — Linux/Mac only |
+| `"textfsm"` | `list[dict]` | Netmiko + NTC template matched |
+| `"raw"` | `str` | No template matched; plain CLI text |
+
+Panels check `data["source"]` and branch accordingly. Each panel has a
+`_populate_textfsm()` method (or `_populate_*_textfsm()` for panels with
+multiple sub-tables) that handles the `list[dict]` shape.
+
+`_send(conn, command)` in `connector.py` is a private helper that wraps
+`send_command(..., use_textfsm=True)` and returns `("textfsm", list)` or
+`("raw", str)` depending on whether an NTC template was found.
+
+`run_cli_command()` is the exception — it returns a plain `str` (not a dict),
+since the CLI panel sends arbitrary commands that have no guaranteed template.
 
 **Inheritance pattern in `panels/`:**
 - `BasePanel` in `base.py` handles: fetch button, spinner, threading, error
@@ -196,8 +213,16 @@ python main.py
 | `db.py` | `init_db` stored the bcrypt seed hash as `bytes` (BLOB), but `verify_user` called `.encode()` on it assuming `str` — caused `AttributeError` on every login attempt with the default `admin` account. Fixed by adding `.decode()` to the seed. Added a repair pass to fix existing DBs on next startup. |
 | `main.py` | Four inline `setStyleSheet()` calls violated the "all styles in `styles.py`" rule. Replaced with `setObjectName()` calls and matching selectors in `styles.py`. |
 | `styles.py` | Added `QMenuBar`, `QMenu`, `#loginSep`, `#sidebar`, `#userBadge` selectors to cover the widgets previously styled inline. |
-| `requirements.txt` | Added `pyats` and `genie` as commented-out entries with a Linux/Mac-only note. |
+| `requirements.txt` | Added `pyats` and `genie` as commented-out entries with a Linux/Mac-only note. Added `ntc-templates>=3.0.0` as a required dependency. |
 | `CLAUDE.md` | Corrected app name ("Net Inspector" → "RemoteIn"), DB path, and project structure header. |
+| `connector.py` | Added `Any` to `typing` import (was used in `run_in_thread` type hint but not imported — would fail mypy). |
+| `connector.py` | Added SSH host key params to `_netmiko_device()`: `ssh_strict=False`, `system_host_keys=False`, `use_keys=False`, `key_file=None`, and `disabled_algorithms` to fall back to legacy RSA for older Cisco devices. |
+| `connector.py` | Added `_send()` helper to consolidate TextFSM detection logic — returns `("textfsm", list)` or `("raw", str)`. All six `get_*` functions now call `_send()` instead of raw `send_command()`. |
+| `connector.py` | Upgraded from two-path to three-path parsing: `genie` → `textfsm` → `raw`. |
+| `panels/interfaces.py` | Added `_populate_textfsm()` to render NTC template output into the interfaces table. |
+| `panels/routing.py` | Added `_populate_textfsm()` to render NTC route entries. Handles `network`/`prefix_length` merge into CIDR notation. |
+| `panels/bgp_ospf.py` | Added `_populate_bgp_textfsm()` and `_populate_ospf_textfsm()`. BGP table columns updated to match NTC field names: Neighbor, AS, State, Router ID, Remote IP, VRF. |
+| `panels/arp_mac.py` | Added `_populate_arp_textfsm()` and `_populate_mac_textfsm()`. |
 
 ---
 
@@ -205,25 +230,20 @@ python main.py
 
 ### Bugs to fix next
 
-- **`connector.py:71`** — `Any` is used in the type hint for `run_in_thread` but
-  never imported from `typing`. Add `Any` to the import on line 3. Not a runtime
-  crash (protected by `from __future__ import annotations`) but will fail `mypy`.
-
-- **`connector.py:41`** — `_genie_testbed` has `junos` missing from `os_map`.
-  Juniper devices fall back to `"ios"` when using Genie on Linux/Mac, which is
-  wrong. Add `"junos": "junos"` to that dict.
+- **`connector.py` — `junos` missing from `_genie_testbed` `os_map`.** Juniper
+  devices fall back to `"ios"` when using Genie on Linux/Mac, which is wrong.
+  Add `"junos": "junos"` to the `os_map` dict on line 49.
 
 ### Quality improvements
 
-- **`connector.py` — eliminate duplication.** Every `get_*` function is the same
-  Genie-try → Netmiko-fallback pattern copy-pasted six times. Extract a shared
-  `_fetch(device, genie_cmd, netmiko_cmd)` helper. Cuts the file by ~60 lines and
-  means any future fix (e.g. timeout handling) only needs to be made once.
+- **`connector.py` — Genie path still duplicated across six `get_*` functions.**
+  `_send()` consolidated the Netmiko+TextFSM side, but each function still
+  repeats the same Genie connect/parse/disconnect block. A `_genie_fetch(device,
+  cmd)` helper would complete the cleanup.
 
 - **`connector.py` — Genie reconnects on every fetch.** Each panel button click
-  opens a fresh SSH session. Consider caching the Genie `dev` object on the
-  device dict or in a module-level dict keyed by device ID, and disconnecting on
-  device change.
+  opens a fresh SSH session. Consider caching the Genie `dev` object keyed by
+  device ID and disconnecting on device change.
 
 - **`db.py` — device passwords stored in plaintext.** User account passwords are
   bcrypt-hashed correctly, but SSH device credentials sit in plaintext SQLite.
@@ -237,10 +257,6 @@ python main.py
 
 - **Export to CSV/clipboard** — a right-click or toolbar button on each panel
   table to copy the visible data. Useful for pasting into tickets.
-
-- **SSH host key verification** — currently Netmiko uses `ConnectHandler` with
-  default settings, which may auto-accept unknown host keys. A known_hosts check
-  or first-connect prompt would improve security.
 
 - **Operator role enforcement** — the `role` column exists in the DB but the UI
   does not restrict operators from any actions beyond hiding the Admin menu.
