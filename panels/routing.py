@@ -39,6 +39,11 @@ class RoutingPanel(BasePanel):
             self.raw.setPlainText(data["data"])
             return
 
+        if data["source"] == "textfsm":
+            self._populate_textfsm(data["data"])
+            return
+
+        # Genie structured path
         vrfs = data["data"].get("vrf", {})
         rows = []
         for vrf_name, vrf_data in vrfs.items():
@@ -66,3 +71,22 @@ class RoutingPanel(BasePanel):
                 set_cell(self.table, r, c, val, color if c == 1 else None)
 
         self.status_message.emit(f"Fetched {len(rows)} routes.")
+
+    def _populate_textfsm(self, rows: list):
+        self.table.setRowCount(len(rows))
+        for r, route in enumerate(rows):
+            proto  = route.get("protocol", "")
+            color  = PROTO_COLORS.get(proto[0] if proto else "", None)
+            prefix = route.get("network", "")
+            mask   = route.get("prefix_length", "")
+            if mask:
+                prefix = f"{prefix}/{mask}"
+
+            set_cell(self.table, r, 0, prefix)
+            set_cell(self.table, r, 1, proto, color)
+            set_cell(self.table, r, 2, route.get("nexthop_ip", ""))
+            set_cell(self.table, r, 3, route.get("nexthop_if", ""))
+            set_cell(self.table, r, 4, route.get("metric", ""))
+            set_cell(self.table, r, 5, route.get("distance", ""))
+
+        self.status_message.emit(f"Fetched {len(rows)} routes via TextFSM.")
