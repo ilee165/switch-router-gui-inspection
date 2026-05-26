@@ -256,3 +256,199 @@ python main.py
 - **Operator role enforcement** — the `role` column exists in the DB but the UI
   does not restrict operators from any actions beyond hiding the Admin menu.
   Consider disabling the CLI panel's free-form send for `operator` users.
+
+<!-- GSD:project-start source:PROJECT.md -->
+## Project
+
+**RemoteIn — Code Cleanup & Quality Milestone**
+
+A focused cleanup milestone for **RemoteIn** — a local PyQt6 desktop GUI for
+querying Cisco and other vendor network devices over SSH.
+
+This milestone does not add features. It resolves the highest-value technical
+debt identified in the codebase map: structural duplication in `connector.py`,
+visible bugs in panel rendering, and dead code that adds noise without purpose.
+
+Security concerns (plaintext device credentials, SSH host key verification)
+are explicitly out of scope — they belong in a dedicated security milestone.
+
+---
+
+**Core Value:** **The single most important thing:** Extract `_genie_fetch()` to eliminate the
+six copy-pasted Genie blocks in `connector.py` — the highest-leverage single
+change in the codebase. Everything else supports that or stands independently.
+
+---
+<!-- GSD:project-end -->
+
+<!-- GSD:stack-start source:codebase/STACK.md -->
+## Technology Stack
+
+## Language
+- All application code is pure Python
+- Uses `from __future__ import annotations` for deferred type evaluation (Python 3.7+ pattern)
+- Type hints used throughout (`Callable`, `Any`, `dict | list | None`, `list[str]`)
+## Core Frameworks
+| Framework | Version | Purpose |
+|-----------|---------|---------|
+| PyQt6 | `>=6.6.0` | Desktop GUI — windows, dialogs, tabs, tables, signals/slots |
+- `QApplication`, `QMainWindow`, `QDialog`, `QWidget` — window/dialog lifecycle (`main.py`)
+- `QThread`, `QObject`, `pyqtSignal` — worker threading model (`panels/base.py`)
+- `QTableWidget`, `QHeaderView` — data display in all panel tabs (`panels/base.py`)
+- `QTabWidget`, `QSplitter`, `QListWidget` — layout and navigation (`main.py`)
+- `QStatusBar`, `QMenuBar`, `QMenu`, `QAction` — application chrome (`main.py`)
+- `QFormLayout`, `QHBoxLayout`, `QVBoxLayout` — form and panel layouts
+- `QColor` — cell-level color coding in tables (`panels/base.py`)
+## Key Libraries
+| Name | Version | Purpose |
+|------|---------|---------|
+| `netmiko` | `>=4.3.0` | SSH connections to network devices; TextFSM-parsed `send_command()` |
+| `ntc-templates` | `>=3.0.0` | NTC TextFSM templates — structured parsing of CLI output for all vendors |
+| `paramiko` | `>=3.0.0` | SSH transport layer (Netmiko dependency; also enables legacy RSA algorithm fallback) |
+| `bcrypt` | `>=4.0.0` | Password hashing for local user accounts in SQLite |
+| `pyats` | `>=23.0` (commented out) | Cisco pyATS structured parsing — Linux/Mac only, optional |
+| `genie` | `>=23.0` (commented out) | Genie parser (pyATS companion) — Linux/Mac only, optional |
+## Standard Library Usage
+| Module | Where Used | Purpose |
+|--------|-----------|---------|
+| `sqlite3` | `db.py` | Local device inventory and user account persistence |
+| `threading` | `connector.py` | `run_in_thread()` daemon thread helper for blocking network calls |
+| `pathlib.Path` | `db.py` | Cross-platform DB path: `~/.switch_router_gui/data.db` |
+| `os` | `db.py` | Supplementary path operations |
+| `sys` | `main.py` | `sys.exit()` and `sys.argv` for Qt application lifecycle |
+| `typing` | `connector.py` | `Callable`, `Any` for function signatures |
+## Build & Tooling
+- **Package manager:** pip (implied by `requirements.txt`; no `pyproject.toml`, `setup.py`, or `Pipfile` present)
+- **Virtual environment:** `venv/` — standard Python venv, created against Python 3.14
+- **No build system:** no Makefile, no `setup.cfg`, no `pyproject.toml`, no wheel/sdist config
+- **No linter/formatter config:** no `.flake8`, `.pylintrc`, `pyproject.toml [tool.black]`, or similar
+- **No CI configuration:** no `.github/workflows/`, no `tox.ini`
+- **No test runner config:** no `pytest.ini`, no `setup.cfg [tool:pytest]`
+## Configuration
+- **No `.env` file or environment variable configuration** — the app is fully self-contained
+- **DB path** is hardcoded in `db.py`: `~/.switch_router_gui/data.db` (user home directory)
+- **Styles** are compiled into a single QSS string in `styles.py` — no external CSS/config
+- **Platform availability flag** is set at import time in `connector.py`:
+- **`venv/pyvenv.cfg`** — records venv Python version (3.14.4) and home path; not application config
+## Notes
+- **Windows constraint:** `pyats` and `genie` are commented out in `requirements.txt` with an explicit Linux/Mac-only note. On Windows, all structured parsing falls through to Netmiko + NTC TextFSM templates.
+- **Three-path parsing architecture** (controlled by `GENIE_AVAILABLE` flag): Genie → TextFSM → raw string. All `get_*` functions in `connector.py` return `{"source": <"genie"|"textfsm"|"raw">, "data": <payload>}`.
+- **No packaging or distribution tooling** — this is a local developer tool, run directly with `python main.py`.
+- **Legacy SSH algorithm fallback** is baked into `_netmiko_device()` via `disabled_algorithms` — targets older Cisco devices that don't support `rsa-sha2-256`/`rsa-sha2-512`.
+<!-- GSD:stack-end -->
+
+<!-- GSD:conventions-start source:CONVENTIONS.md -->
+## Conventions
+
+## Naming
+## Code Organization
+- `db.py` — SQLite access only; no GUI imports; exports plain `dict` returns
+- `connector.py` — SSH/CLI/Genie only; no GUI imports; no knowledge of widgets
+- `panels/` — GUI only; imports `connector` but never `db` directly
+- `main.py` — bootstraps app, owns the main window and device list, passes device dicts to panels
+- `device_manager.py` / `user_manager.py` — self-contained dialogs; own their `db` calls
+- `styles.py` — single `QSS` string; no logic
+## Error Handling
+## Type Annotations
+- `connector.py`: `run_in_thread(fn: Callable, *args, callback: Callable[[Any, Exception | None], None])`, `_send(conn, command: str) -> tuple[str, dict | list | None]`, all `get_*` functions `(device: dict) -> dict`, `run_cli_command(device: dict, command: str) -> str`
+- `db.py`: `verify_user(username: str, password: str)`, `create_user(username: str, password: str, role: str = "operator")`, `delete_user(user_id: int)`, `get_device(device_id: int)`, `delete_device(device_id: int)`
+- `base.py`: `make_table(headers: list[str]) -> QTableWidget`, `set_cell(table: QTableWidget, row: int, col: int, text: str, color: str | None = None)`, `BasePanel.__init__(self, label: str, parent=None)`, `set_device(self, device: dict | None)`
+- `main.py`: `MainWindow.__init__(self, user: dict)`, `_set_status(self, msg: str)`
+## Imports
+## Style Notes
+## Deviations / Inconsistencies
+<!-- GSD:conventions-end -->
+
+<!-- GSD:architecture-start source:ARCHITECTURE.md -->
+## Architecture
+
+## Overview
+## Layers & Responsibilities
+### Persistence tier (`db.py`)
+- SQLite file at `~/.switch_router_gui/data.db`
+- Manages two tables: `users` and `devices`
+- Exposes: `init_db()`, `verify_user()`, `list_devices()`, `get_device()`,
+- Passwords for user accounts are bcrypt-hashed; device SSH credentials are
+- All SQL uses `?` placeholders — no f-string interpolation
+### GUI tier (`main.py`, `panels/`)
+- `main.py` owns the application entry point, login dialog, and main window
+- The main window holds the device list (sidebar) and a `QTabWidget` with
+- Panels are read-only display widgets; they do not write to the database
+- When the user selects a device, `main.py` calls `panel.set_device(device)`
+- When the user clicks FETCH on a panel, the panel calls into `connector.py`
+### Network tier (`connector.py`)
+- Stateless module — no persistent connections, no class instances
+- Each `get_*` function opens a fresh SSH session, runs a command, closes the
+- The three-path parsing strategy is implemented here (see below)
+- `run_cli_command()` is the exception: returns a plain `str`, not a dict
+## Core Data Flow
+```
+```
+- The connector function is `run_cli_command(device, command)`
+- The return value is a plain `str`, not a `{"source", "data"}` dict
+- The panel appends the command to an in-memory history table
+## Key Design Patterns
+### 1. Three-path parsing in `connector.py`
+```
+```
+### 2. BasePanel subclassing
+| Method | Purpose |
+|---|---|
+| `_build_content(layout)` | Declare which widgets the panel contains |
+| `_run_fetch()` | Call `_start_worker(connector.get_*, self._device)` |
+| `_on_result(data)` | Unpack the result dict and populate widgets |
+### 3. Worker threading via `FetchWorker` + `QThread`
+| Signal | Type | When |
+|---|---|---|
+| `result` | `object` | Connector function returned successfully |
+| `error` | `str` | Connector function raised an exception |
+| `finished` | — | Always, after result or error |
+### 4. Signal bus for status messages
+## Threading Model
+- A `QThread` is created and started
+- A `FetchWorker` (QObject) is moved to that thread
+- The blocking SSH call runs entirely on the worker thread
+- Qt signals carry results back to the main (GUI) thread
+- The thread and worker are scheduled for deletion via `deleteLater()` once
+## State Management
+| State | Where it lives | Scope |
+|---|---|---|
+| Logged-in user dict | `MainWindow._user` | Application lifetime |
+| Selected device dict | `MainWindow._selected_device` | Application lifetime |
+| Device dict for fetch | `BasePanel._device` | Per-panel, set by `set_device()` |
+| CLI command history | `CliPanel.hist_list` (QTableWidget rows) | In-memory, lost on quit |
+| Active QThread/worker | `BasePanel._thread`, `BasePanel._worker` | Per-fetch, cleared by Qt after finish |
+| Device inventory | SQLite `devices` table | Persistent |
+| User accounts | SQLite `users` table | Persistent |
+## Notes
+- pyATS/Genie are imported with a try/except at module load time in
+- SSH host key checking is disabled (`ssh_strict=False`, `system_host_keys=False`)
+- `styles.py` is applied globally via `app.setStyleSheet(QSS)` in `main()`.
+- The `PLATFORM_MAP` in `connector.py` is the single source of truth for
+<!-- GSD:architecture-end -->
+
+<!-- GSD:skills-start source:skills/ -->
+## Project Skills
+
+No project skills found. Add skills to any of: `.claude/skills/`, `.agents/skills/`, `.cursor/skills/`, `.github/skills/`, or `.codex/skills/` with a `SKILL.md` index file.
+<!-- GSD:skills-end -->
+
+<!-- GSD:workflow-start source:GSD defaults -->
+## GSD Workflow Enforcement
+
+Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
+
+Use these entry points:
+- `/gsd-quick` for small fixes, doc updates, and ad-hoc tasks
+- `/gsd-debug` for investigation and bug fixing
+- `/gsd-execute-phase` for planned phase work
+
+Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
+<!-- GSD:workflow-end -->
+
+<!-- GSD:profile-start -->
+## Developer Profile
+
+> Profile not yet configured. Run `/gsd-profile-user` to generate your developer profile.
+> This section is managed by `generate-claude-profile` -- do not edit manually.
+<!-- GSD:profile-end -->

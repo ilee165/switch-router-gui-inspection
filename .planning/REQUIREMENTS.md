@@ -53,10 +53,10 @@ Generated: 2026-05-25
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| MAINT-01 | TBD | Pending |
-| MAINT-02 | TBD | Pending |
-| MAINT-03 | TBD | Pending |
-| BUG-01 | TBD | Pending |
-| BUG-02 | TBD | Pending |
-| DEAD-01 | TBD | Pending |
-| DEAD-02 | TBD | Pending |
+| MAINT-01 | Phase 1 | Pending |
+| BUG-02 | Phase 1 | Pending |
+| DEAD-01 | Phase 1 | Pending |
+| MAINT-02 | Phase 2 | Pending |
+| MAINT-03 | Phase 2 | Pending |
+| BUG-01 | Phase 2 | Pending |
+| DEAD-02 | Phase 2 | Pending |
