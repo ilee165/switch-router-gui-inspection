@@ -96,7 +96,7 @@ class NeighborPanel(BasePanel):
             set_cell(self.ospf_table, r, 2, nbr.get("state", ""))
             set_cell(self.ospf_table, r, 3, nbr.get("dead_time", ""))
             set_cell(self.ospf_table, r, 4, nbr.get("interface", ""))
-            set_cell(self.ospf_table, r, 5, nbr.get("address", ""))
+            set_cell(self.ospf_table, r, 5, nbr.get("ip_address", ""))
 
         self.status_message.emit(f"Fetched {len(rows)} OSPF neighbors via TextFSM.")
 
