@@ -87,20 +87,28 @@ def _send(conn, command: str) -> tuple[str, dict | list | None]:
     return "raw", parsed
 
 
+def _genie_fetch(device: dict, cmd: str) -> dict | None:
+    """Connect via Genie, parse cmd, disconnect. Returns parsed dict or None on failure."""
+    try:
+        tb = genie_load(_genie_testbed(device))
+        dev = tb.devices[device["name"]]
+        dev.connect(log_stdout=False, learn_hostname=True)
+        try:
+            return dev.parse(cmd)
+        finally:
+            dev.disconnect()
+    except Exception:
+        return None
+
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 def get_interfaces(device: dict) -> dict:
     """Return structured interface data via Genie, TextFSM, or raw CLI."""
     if GENIE_AVAILABLE:
-        try:
-            tb = genie_load(_genie_testbed(device))
-            dev = tb.devices[device["name"]]
-            dev.connect(log_stdout=False, learn_hostname=True)
-            data = dev.parse("show interfaces")
-            dev.disconnect()
-            return {"source": "genie", "data": data}
-        except Exception:
-            pass
+        result = _genie_fetch(device, "show interfaces")
+        if result is not None:
+            return {"source": "genie", "data": result}
     with ConnectHandler(**_netmiko_device(device)) as conn:
         if device["platform"] not in NO_ENABLE_PLATFORMS:
             conn.enable()
@@ -110,15 +118,9 @@ def get_interfaces(device: dict) -> dict:
 
 def get_routing_table(device: dict) -> dict:
     if GENIE_AVAILABLE:
-        try:
-            tb = genie_load(_genie_testbed(device))
-            dev = tb.devices[device["name"]]
-            dev.connect(log_stdout=False, learn_hostname=True)
-            data = dev.parse("show ip route")
-            dev.disconnect()
-            return {"source": "genie", "data": data}
-        except Exception:
-            pass
+        result = _genie_fetch(device, "show ip route")
+        if result is not None:
+            return {"source": "genie", "data": result}
     with ConnectHandler(**_netmiko_device(device)) as conn:
         if device["platform"] not in NO_ENABLE_PLATFORMS:
             conn.enable()
@@ -128,15 +130,9 @@ def get_routing_table(device: dict) -> dict:
 
 def get_bgp_neighbors(device: dict) -> dict:
     if GENIE_AVAILABLE:
-        try:
-            tb = genie_load(_genie_testbed(device))
-            dev = tb.devices[device["name"]]
-            dev.connect(log_stdout=False, learn_hostname=True)
-            data = dev.parse("show bgp all neighbors")
-            dev.disconnect()
-            return {"source": "genie", "data": data}
-        except Exception:
-            pass
+        result = _genie_fetch(device, "show bgp all neighbors")
+        if result is not None:
+            return {"source": "genie", "data": result}
     with ConnectHandler(**_netmiko_device(device)) as conn:
         if device["platform"] not in NO_ENABLE_PLATFORMS:
             conn.enable()
@@ -146,15 +142,9 @@ def get_bgp_neighbors(device: dict) -> dict:
 
 def get_ospf_neighbors(device: dict) -> dict:
     if GENIE_AVAILABLE:
-        try:
-            tb = genie_load(_genie_testbed(device))
-            dev = tb.devices[device["name"]]
-            dev.connect(log_stdout=False, learn_hostname=True)
-            data = dev.parse("show ip ospf neighbor")
-            dev.disconnect()
-            return {"source": "genie", "data": data}
-        except Exception:
-            pass
+        result = _genie_fetch(device, "show ip ospf neighbor")
+        if result is not None:
+            return {"source": "genie", "data": result}
     with ConnectHandler(**_netmiko_device(device)) as conn:
         if device["platform"] not in NO_ENABLE_PLATFORMS:
             conn.enable()
@@ -164,15 +154,9 @@ def get_ospf_neighbors(device: dict) -> dict:
 
 def get_arp_table(device: dict) -> dict:
     if GENIE_AVAILABLE:
-        try:
-            tb = genie_load(_genie_testbed(device))
-            dev = tb.devices[device["name"]]
-            dev.connect(log_stdout=False, learn_hostname=True)
-            data = dev.parse("show ip arp")
-            dev.disconnect()
-            return {"source": "genie", "data": data}
-        except Exception:
-            pass
+        result = _genie_fetch(device, "show ip arp")
+        if result is not None:
+            return {"source": "genie", "data": result}
     with ConnectHandler(**_netmiko_device(device)) as conn:
         if device["platform"] not in NO_ENABLE_PLATFORMS:
             conn.enable()
@@ -182,15 +166,9 @@ def get_arp_table(device: dict) -> dict:
 
 def get_mac_table(device: dict) -> dict:
     if GENIE_AVAILABLE:
-        try:
-            tb = genie_load(_genie_testbed(device))
-            dev = tb.devices[device["name"]]
-            dev.connect(log_stdout=False, learn_hostname=True)
-            data = dev.parse("show mac address-table")
-            dev.disconnect()
-            return {"source": "genie", "data": data}
-        except Exception:
-            pass
+        result = _genie_fetch(device, "show mac address-table")
+        if result is not None:
+            return {"source": "genie", "data": result}
     with ConnectHandler(**_netmiko_device(device)) as conn:
         if device["platform"] not in NO_ENABLE_PLATFORMS:
             conn.enable()
