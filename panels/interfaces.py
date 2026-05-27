@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QVBoxLayout, QLabel, QTextEdit
-from .base import BasePanel, make_table, set_cell
+from .base import BasePanel, make_table, set_cell, PALETTE
 import connector
 
 
@@ -47,7 +47,7 @@ class InterfacesPanel(BasePanel):
             speed = info.get("bandwidth", "")
             duplex= info.get("duplex_mode", "")
             desc  = info.get("description", "")
-            color = "#10B981" if "up" in oper.lower() else "#EF4444"
+            color = PALETTE["success"] if "up" in oper.lower() else PALETTE["error"]
 
             set_cell(self.table, row, 0, name)
             set_cell(self.table, row, 1, oper, color)
@@ -64,7 +64,7 @@ class InterfacesPanel(BasePanel):
         for r, iface in enumerate(rows):
             status = iface.get("link_status", "")
             proto  = iface.get("protocol_status", "")
-            color  = "#10B981" if "up" in status.lower() else "#EF4444"
+            color  = PALETTE["success"] if "up" in status.lower() else PALETTE["error"]
 
             set_cell(self.table, r, 0, iface.get("interface", ""))
             set_cell(self.table, r, 1, status, color)

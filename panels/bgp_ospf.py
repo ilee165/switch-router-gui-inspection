@@ -1,12 +1,12 @@
 from PyQt6.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QTextEdit
-from .base import BasePanel, make_table, set_cell
+from .base import BasePanel, make_table, set_cell, PALETTE
 import connector
 
 
 BGP_STATE_COLORS = {
-    "Established": "#10B981",
-    "Idle":        "#EF4444",
-    "Active":      "#F59E0B",
+    "Established": PALETTE["success"],
+    "Idle":        PALETTE["error"],
+    "Active":      PALETTE["caution"],
 }
 
 
@@ -119,9 +119,9 @@ class NeighborPanel(BasePanel):
                     nbr_ip,
                     str(nbr.get("remote_as", "")),
                     nbr.get("session_state", ""),
-                    nbr.get("up_down", ""),
-                    str(prefixes),
-                    nbr.get("description", ""),
+                    nbr.get("router_id", ""),
+                    nbr_ip,
+                    vrf_name,
                 ))
 
         self.bgp_table.setRowCount(len(rows))

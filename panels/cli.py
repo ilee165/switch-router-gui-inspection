@@ -1,9 +1,9 @@
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QTextEdit, QTableWidget, QTableWidgetItem
+    QTextEdit, QTableWidgetItem
 )
 from PyQt6.QtGui import QFont
-from .base import BasePanel, set_cell
+from .base import BasePanel, set_cell, make_table
 import connector
 
 
@@ -28,11 +28,8 @@ class CliPanel(BasePanel):
         hist_hdr.setObjectName("sectionHeader")
         layout.addWidget(hist_hdr)
 
-        self.hist_list = QTableWidget(0, 2)
-        self.hist_list.setHorizontalHeaderLabels(["#", "Command"])
-        self.hist_list.horizontalHeader().setStretchLastSection(True)
+        self.hist_list = make_table(["#", "Command"])
         self.hist_list.setMaximumHeight(100)
-        self.hist_list.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.hist_list.itemDoubleClicked.connect(self._replay)
         layout.addWidget(self.hist_list)
 

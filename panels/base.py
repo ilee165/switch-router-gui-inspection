@@ -6,6 +6,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject
 from PyQt6.QtGui import QColor
 
+PALETTE = {"success": "#10B981", "error": "#EF4444", "caution": "#F59E0B"}
+
 
 # ── Worker thread ──────────────────────────────────────────────────────────────
 
@@ -110,7 +112,7 @@ class BasePanel(QWidget):
         self._thread.start()
 
     def _on_result(self, data):
-        pass  # override in subclass
+        raise NotImplementedError
 
     def _on_error(self, msg: str):
         self.status_message.emit(f"ERROR: {msg}")
