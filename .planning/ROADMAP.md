@@ -1,22 +1,45 @@
-# ROADMAP.md — RemoteIn Code Cleanup & Quality
+# ROADMAP.md — RemoteIn Security (v1.1)
 
 ## Phases
 
 | # | Name | Status | Requirements | Completed |
-|---|---|---|---|---|
+|---|------|--------|--------------|-----------|
 | 1 | connector.py Cleanup | Complete | MAINT-01, BUG-02, DEAD-01 | 2026-05-27 |
-| 2 | Panels Cleanup | 1/1 | Complete    | 2026-05-27 |
+| 2 | Panels Cleanup | Complete | MAINT-02, MAINT-03, BUG-01, DEAD-02 | 2026-05-27 |
+| 3 | Credential Encryption | Pending | CRED-01, CRED-02, CRED-03, CRED-04 | — |
+| 4 | SSH Host Key Verification | Pending | SSH-01, SSH-02, SSH-03, SSH-04 | — |
 
-## Phase 2 Plans
+---
 
-- [x] 02-01-PLAN.md — MAINT-02 + MAINT-03 + BUG-01 + DEAD-02: enforce `_on_result`
-  contract, add `PALETTE` + replace inline hex in 3 files, fix BGP Genie column
-  tuple, migrate CLI table to `make_table()` (4 tasks + human-verify checkpoint;
-  sequential due to shared `base.py` and `bgp_ospf.py` edits)
+## Phase 3: Credential Encryption
 
-## Success Criteria — Phase 2
+**Goal:** Device passwords are encrypted at rest. The encryption key derives
+from the user's login password and is never persisted. Existing plaintext
+passwords are migrated automatically on first login.
 
-1. `BasePanel._on_result()` raises `NotImplementedError` when not overridden
-2. Hex values `#10B981`, `#EF4444`, `#F59E0B` only in `PALETTE` in `panels/base.py`
-3. BGP panel shows correct Router ID, Remote IP, VRF when Genie is parse source
-4. CLI history table built via `make_table()` from `base.py`
+**Files in scope:** `db.py`, `connector.py`, `device_manager.py`, `main.py`, `requirements.txt`
+
+**Success Criteria:**
+1. SQLite `devices` table stores ciphertext for `password` and `enable_pass`, not plaintext
+2. Saving a device encrypts both password fields; loading decrypts on-demand for connection only
+3. First login after upgrade detects plaintext passwords and re-encrypts them transparently
+4. Decrypted value is never written back to disk; memory reference is short-lived
+5. Key derivation uses PBKDF2-HMAC-SHA256 with a stored salt; key is derived fresh each login session
+
+---
+
+## Phase 4: SSH Host Key Verification
+
+**Goal:** Every SSH connection verifies the server's host key. First connect
+shows a fingerprint dialog. Changed keys block the connection with a warning.
+Accepted keys are stored in SQLite and manageable from device settings.
+
+**Files in scope:** `db.py`, `connector.py`, `device_manager.py` (or new `host_key_dialog.py`)
+
+**Success Criteria:**
+1. Connecting to an unknown host raises a dialog showing the key fingerprint (SHA256)
+2. Selecting "Accept" or "Always Trust" stores the key in the `host_keys` table
+3. Selecting "Reject" aborts the connection without storing anything
+4. Reconnecting to a known host with a matching key connects silently
+5. Reconnecting with a changed key shows a warning dialog — user must explicitly accept to proceed
+6. Device settings dialog includes a tab or section to view and delete stored host keys

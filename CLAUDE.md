@@ -174,17 +174,19 @@ python main.py
 
 ## Roadmap
 
-### Active (this milestone — branch: gsd-review-code-cleanup)
+### Active (this milestone — branch: gsd-security-milestone)
 
-- [ ] MAINT-02: `BasePanel._on_result` raises `NotImplementedError` (not a `pass` stub)
-- [ ] MAINT-03: `PALETTE` dict in `panels/base.py` — replace inline hex in `interfaces.py`, `bgp_ospf.py`
-- [ ] BUG-01: Fix BGP Genie column mismatch in `panels/bgp_ospf.py`
-- [ ] DEAD-02: CLI history table uses `make_table()` from `base.py`
+- [ ] CRED-01: Device passwords encrypted at rest in SQLite (AES-256 via Fernet)
+- [ ] CRED-02: Encryption key derived from login password (PBKDF2) — never stored on disk
+- [ ] CRED-03: Existing plaintext passwords migrated to encrypted form on first login
+- [ ] CRED-04: Decrypted password exists in memory only for the duration of a connection
+- [ ] SSH-01: First connect to unknown host shows fingerprint dialog (Accept / Reject / Always Trust)
+- [ ] SSH-02: Accepted host keys stored in SQLite `host_keys` table
+- [ ] SSH-03: Changed host key on reconnect triggers warning dialog before proceeding
+- [ ] SSH-04: User can view and delete stored host keys from device settings
 
 ### Deferred
 
-- Credential encryption for device passwords (security milestone)
-- SSH host key trust dialog (security milestone)
 - pytest suite (testing milestone)
 - Role enforcement for operators (feature milestone)
 - Connection pooling / SSH session caching (performance milestone)

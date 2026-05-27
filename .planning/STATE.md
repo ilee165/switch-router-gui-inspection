@@ -1,43 +1,37 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: milestone_complete
-last_updated: 2026-05-27T19:33:35.501Z
+milestone: v1.1
+milestone_name: Security
+status: in_progress
+last_updated: 2026-05-27T21:03:00.000Z
 progress:
   total_phases: 2
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
-  percent: 50
-stopped_at: Milestone complete (Phase 02 was final phase)
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+stopped_at: Milestone initialized — no phases started
 ---
 
 # STATE.md — Project State
 
 ## Current Phase
 
-Phase: 02
-Status: Milestone complete
+Phase: 3
+Status: Not started
 
 ## Phase Index
 
 | # | Name | Status | Requirements |
 |---|------|--------|--------------|
-| 1 | connector.py Cleanup | completed | MAINT-01, BUG-02, DEAD-01 |
-| 2 | Panels Cleanup | not_started | MAINT-02, MAINT-03, BUG-01, DEAD-02 |
+| 3 | Credential Encryption | not_started | CRED-01, CRED-02, CRED-03, CRED-04 |
+| 4 | SSH Host Key Verification | not_started | SSH-01, SSH-02, SSH-03, SSH-04 |
 
 ## Decisions
 
-- Removed run_in_thread() — panels already use QThread/FetchWorker; dead code with no callers
-- NO_ENABLE_PLATFORMS placed at module level adjacent to PLATFORM_MAP — single source of truth for platform routing
-- _genie_fetch() returns None on any exception — silent fallthrough preserves three-path strategy
-
-## Last Session
-
-- **Timestamp:** 2026-05-27T04:50:00Z
-- **Stopped at:** Phase 2 context gathered
-- **Resume file:** .planning/phases/02-panels-cleanup/02-CONTEXT.md
+- Encryption key derived from login password via PBKDF2 — no external keystore
+- SSH host key: show fingerprint dialog on first connect (Accept / Reject / Always Trust)
+- Existing plaintext passwords migrated transparently on first login after upgrade
 
 ## Quick Tasks Completed
 
@@ -48,5 +42,6 @@ Status: Milestone complete
 ## Notes
 
 Initialized: 2026-05-25
-Milestone: Code Cleanup & Quality
-Branch: gsd-review-code-cleanup
+Security milestone started: 2026-05-27
+Branch: gsd-security-milestone
+Prior milestone: Code Cleanup & Quality (v1.0) — COMPLETE
