@@ -20,6 +20,8 @@ PLATFORM_MAP = {
     "junos":  "juniper_junos",
 }
 
+NO_ENABLE_PLATFORMS = {"eos", "junos"}
+
 
 def _netmiko_device(device: dict) -> dict:
     """Build Netmiko connection dict from device record."""
@@ -100,7 +102,8 @@ def get_interfaces(device: dict) -> dict:
         except Exception:
             pass
     with ConnectHandler(**_netmiko_device(device)) as conn:
-        conn.enable()
+        if device["platform"] not in NO_ENABLE_PLATFORMS:
+            conn.enable()
         source, data = _send(conn, "show interfaces")
     return {"source": source, "data": data}
 
@@ -117,7 +120,8 @@ def get_routing_table(device: dict) -> dict:
         except Exception:
             pass
     with ConnectHandler(**_netmiko_device(device)) as conn:
-        conn.enable()
+        if device["platform"] not in NO_ENABLE_PLATFORMS:
+            conn.enable()
         source, data = _send(conn, "show ip route")
     return {"source": source, "data": data}
 
@@ -134,7 +138,8 @@ def get_bgp_neighbors(device: dict) -> dict:
         except Exception:
             pass
     with ConnectHandler(**_netmiko_device(device)) as conn:
-        conn.enable()
+        if device["platform"] not in NO_ENABLE_PLATFORMS:
+            conn.enable()
         source, data = _send(conn, "show ip bgp neighbors")
     return {"source": source, "data": data}
 
@@ -151,7 +156,8 @@ def get_ospf_neighbors(device: dict) -> dict:
         except Exception:
             pass
     with ConnectHandler(**_netmiko_device(device)) as conn:
-        conn.enable()
+        if device["platform"] not in NO_ENABLE_PLATFORMS:
+            conn.enable()
         source, data = _send(conn, "show ip ospf neighbor")
     return {"source": source, "data": data}
 
@@ -168,7 +174,8 @@ def get_arp_table(device: dict) -> dict:
         except Exception:
             pass
     with ConnectHandler(**_netmiko_device(device)) as conn:
-        conn.enable()
+        if device["platform"] not in NO_ENABLE_PLATFORMS:
+            conn.enable()
         source, data = _send(conn, "show ip arp")
     return {"source": source, "data": data}
 
@@ -185,7 +192,8 @@ def get_mac_table(device: dict) -> dict:
         except Exception:
             pass
     with ConnectHandler(**_netmiko_device(device)) as conn:
-        conn.enable()
+        if device["platform"] not in NO_ENABLE_PLATFORMS:
+            conn.enable()
         source, data = _send(conn, "show mac address-table")
     return {"source": source, "data": data}
 
@@ -193,6 +201,7 @@ def get_mac_table(device: dict) -> dict:
 def run_cli_command(device: dict, command: str) -> str:
     """Run an arbitrary CLI command and return raw output."""
     with ConnectHandler(**_netmiko_device(device)) as conn:
-        conn.enable()
+        if device["platform"] not in NO_ENABLE_PLATFORMS:
+            conn.enable()
         output = conn.send_command(command, read_timeout=30)
     return output
