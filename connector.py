@@ -89,16 +89,20 @@ def _send(conn, command: str) -> tuple[str, dict | list | None]:
 
 def _genie_fetch(device: dict, cmd: str) -> dict | None:
     """Connect via Genie, parse cmd, disconnect. Returns parsed dict or None on failure."""
+    dev = None
     try:
         tb = genie_load(_genie_testbed(device))
         dev = tb.devices[device["name"]]
         dev.connect(log_stdout=False, learn_hostname=True)
-        try:
-            return dev.parse(cmd)
-        finally:
-            dev.disconnect()
+        return dev.parse(cmd)
     except Exception:
         return None
+    finally:
+        if dev is not None:
+            try:
+                dev.disconnect()
+            except Exception:
+                pass
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
