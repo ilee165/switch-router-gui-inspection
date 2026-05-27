@@ -110,7 +110,7 @@ class BasePanel(QWidget):
         self._thread.start()
 
     def _on_result(self, data):
-        pass  # override in subclass
+        raise NotImplementedError
 
     def _on_error(self, msg: str):
         self.status_message.emit(f"ERROR: {msg}")
