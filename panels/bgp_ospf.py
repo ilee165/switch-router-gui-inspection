@@ -1,12 +1,12 @@
 from PyQt6.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QTextEdit
-from .base import BasePanel, make_table, set_cell
+from .base import BasePanel, make_table, set_cell, PALETTE
 import connector
 
 
 BGP_STATE_COLORS = {
-    "Established": "#10B981",
-    "Idle":        "#EF4444",
-    "Active":      "#F59E0B",
+    "Established": PALETTE["success"],
+    "Idle":        PALETTE["error"],
+    "Active":      PALETTE["caution"],
 }
 
 

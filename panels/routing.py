@@ -1,15 +1,15 @@
 from PyQt6.QtWidgets import QVBoxLayout, QTextEdit
-from .base import BasePanel, make_table, set_cell
+from .base import BasePanel, make_table, set_cell, PALETTE
 import connector
 
 
 PROTO_COLORS = {
-    "C": "#10B981",  # Connected
-    "S": "#6B7280",  # Static
-    "O": "#60A5FA",  # OSPF
-    "B": "#F59E0B",  # BGP
-    "R": "#A78BFA",  # RIP
-    "i": "#34D399",  # IS-IS
+    "C": PALETTE["success"],  # Connected
+    "S": "#6B7280",           # Static
+    "O": "#60A5FA",           # OSPF
+    "B": PALETTE["caution"],  # BGP
+    "R": "#A78BFA",           # RIP
+    "i": "#34D399",           # IS-IS
 }
 
 
