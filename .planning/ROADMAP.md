@@ -47,7 +47,10 @@ Phase 1 completing first, but the logical order flows from backend-to-frontend.
   3. The BGP panel shows correct Router ID, Remote IP, and VRF column data when Genie is the parse source on Linux/Mac
   4. The CLI panel history table is built via `make_table()` from `base.py`, not a custom table construction
 
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+
+- [ ] 02-01-PLAN.md — MAINT-02 + MAINT-03 + BUG-01 + DEAD-02: enforce _on_result contract, add PALETTE constant + replace inline hex in 3 files, fix BGP Genie column tuple, migrate CLI table to make_table() (4 implementation tasks + 1 human-verify checkpoint; sequential within plan due to shared base.py and bgp_ospf.py edits)
 
 ---
 
