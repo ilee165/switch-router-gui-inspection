@@ -1,6 +1,4 @@
 from __future__ import annotations
-import threading
-from typing import Callable, Any
 
 from netmiko import ConnectHandler, NetmikoTimeoutException, NetmikoAuthenticationException
 
@@ -88,20 +86,6 @@ def _send(conn, command: str) -> tuple[str, dict | list | None]:
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
-
-def run_in_thread(fn: Callable, *args, callback: Callable[[Any, Exception | None], None] = None):
-    """Run a blocking network call in a daemon thread; invoke callback(result, error) when done."""
-    def _worker():
-        try:
-            result = fn(*args)
-            if callback:
-                callback(result, None)
-        except Exception as exc:
-            if callback:
-                callback(None, exc)
-    t = threading.Thread(target=_worker, daemon=True)
-    t.start()
-
 
 def get_interfaces(device: dict) -> dict:
     """Return structured interface data via Genie, TextFSM, or raw CLI."""
