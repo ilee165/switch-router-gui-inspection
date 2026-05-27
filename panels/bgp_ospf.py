@@ -119,9 +119,9 @@ class NeighborPanel(BasePanel):
                     nbr_ip,
                     str(nbr.get("remote_as", "")),
                     nbr.get("session_state", ""),
-                    nbr.get("up_down", ""),
-                    str(prefixes),
-                    nbr.get("description", ""),
+                    nbr.get("router_id", ""),
+                    nbr_ip,
+                    vrf_name,
                 ))
 
         self.bgp_table.setRowCount(len(rows))
