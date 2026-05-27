@@ -5,11 +5,11 @@
 | # | Name | Status | Requirements | Completed |
 |---|---|---|---|---|
 | 1 | connector.py Cleanup | Complete | MAINT-01, BUG-02, DEAD-01 | 2026-05-27 |
-| 2 | Panels Cleanup | Not started | MAINT-02, MAINT-03, BUG-01, DEAD-02 | - |
+| 2 | Panels Cleanup | 1/1 | Complete    | 2026-05-27 |
 
 ## Phase 2 Plans
 
-- [ ] 02-01-PLAN.md — MAINT-02 + MAINT-03 + BUG-01 + DEAD-02: enforce `_on_result`
+- [x] 02-01-PLAN.md — MAINT-02 + MAINT-03 + BUG-01 + DEAD-02: enforce `_on_result`
   contract, add `PALETTE` + replace inline hex in 3 files, fix BGP Genie column
   tuple, migrate CLI table to `make_table()` (4 tasks + human-verify checkpoint;
   sequential due to shared `base.py` and `bgp_ospf.py` edits)
