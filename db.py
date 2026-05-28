@@ -38,6 +38,14 @@ def init_db ():
             );
         """)
 
+        # Add encryption_salt column if this is an upgrade from a pre-encryption install.
+        # sqlite3.OperationalError means the column already exists — that is normal
+        # after the first run and is silently ignored.
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN encryption_salt TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass  # Column already exists on upgraded installs
+
         cur = conn.execute("SELECT COUNT(*) FROM users")
         if cur.fetchone()[0] == 0:
             hashed = bcrypt.hashpw("admin".encode(), bcrypt.gensalt()).decode()
@@ -245,21 +253,41 @@ def get_device(device_id: int):
         return dict(row) if row else None
  
  
-def add_device(name, hostname, ip_address, platform, port, username, password, enable_pass="", notes=""):
+def add_device(name, hostname, ip_address, platform, port, username, password,
+               enable_pass="", notes="", *, session_key: bytes):
+    """Insert a new device row. Passwords are Fernet-encrypted before storage.
+
+    The *, session_key syntax makes session_key keyword-only — callers must write
+    session_key=... explicitly, which makes the encryption requirement visible at
+    the call site (device_manager.py, tests).
+    """
     with get_conn() as conn:
         conn.execute(
             """INSERT INTO devices (name, hostname, ip_address, platform, port, username, password, enable_pass, notes)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (name, hostname, ip_address, platform, port, username, password, enable_pass, notes),
+            (name, hostname, ip_address, platform, port, username,
+             encrypt_field(session_key, password),
+             encrypt_field(session_key, enable_pass),
+             notes),
         )
  
  
-def update_device(device_id, name, hostname, ip_address, platform, port, username, password, enable_pass="", notes=""):
+def update_device(device_id, name, hostname, ip_address, platform, port, username, password,
+                  enable_pass="", notes="", *, session_key: bytes):
+    """Update an existing device row. Passwords are Fernet-encrypted before storage.
+
+    The form in device_manager.py always holds plaintext during editing (because
+    load_device() decrypts before populating fields). So this function always
+    receives plaintext and always encrypts — no double-encryption risk.
+    """
     with get_conn() as conn:
         conn.execute(
             """UPDATE devices SET name=?, hostname=?, ip_address=?, platform=?, port=?, username=?, password=?,
                enable_pass=?, notes=? WHERE id=?""",
-            (name, hostname, ip_address, platform, port, username, password, enable_pass, notes, device_id),
+            (name, hostname, ip_address, platform, port, username,
+             encrypt_field(session_key, password),
+             encrypt_field(session_key, enable_pass),
+             notes, device_id),
         )
  
  
