@@ -29,7 +29,7 @@ class RoutingPanel(BasePanel):
         layout.addWidget(self.raw)
 
     def _run_fetch(self):
-        self._start_worker(connector.get_routing_table, self._device)
+        self._start_worker(connector.get_routing_table, self._device, self._session_key)
 
     def _on_result(self, data):
         self.table.setRowCount(0)

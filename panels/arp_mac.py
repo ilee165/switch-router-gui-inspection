@@ -40,9 +40,9 @@ class ArpMacPanel(BasePanel):
 
     def _run_fetch(self):
         if self.proto_combo.currentText() == "ARP":
-            self._start_worker(connector.get_arp_table, self._device)
+            self._start_worker(connector.get_arp_table, self._device, self._session_key)
         else:
-            self._start_worker(connector.get_mac_table, self._device)
+            self._start_worker(connector.get_mac_table, self._device, self._session_key)
 
     def _on_result(self, data):
         self.raw.clear()
