@@ -60,6 +60,7 @@ class BasePanel(QWidget):
     def __init__(self, label: str, parent=None):
         super().__init__(parent)
         self._device = None
+        self._session_key = None
         self._thread = None
         self._worker = None
 
@@ -84,8 +85,9 @@ class BasePanel(QWidget):
     def _build_content(self, layout: QVBoxLayout):
         raise NotImplementedError
 
-    def set_device(self, device: dict | None):
+    def set_device(self, device: dict | None, session_key: bytes | None = None):
         self._device = device
+        self._session_key = session_key
 
     def fetch(self):
         if not self._device:

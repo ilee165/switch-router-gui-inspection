@@ -49,9 +49,9 @@ class NeighborPanel(BasePanel):
 
     def _run_fetch(self):
         if self.proto_combo.currentText() == "BGP":
-            self._start_worker(connector.get_bgp_neighbors, self._device)
+            self._start_worker(connector.get_bgp_neighbors, self._device, self._session_key)
         else:
-            self._start_worker(connector.get_ospf_neighbors, self._device)
+            self._start_worker(connector.get_ospf_neighbors, self._device, self._session_key)
 
     def _on_result(self, data):
         self.raw.clear()
