@@ -19,6 +19,16 @@ passwords are migrated automatically on first login.
 
 **Files in scope:** `db.py`, `connector.py`, `device_manager.py`, `main.py`, `requirements.txt`
 
+**Plans:** 6 plans across 4 waves
+
+Plans:
+- [ ] 03-01-PLAN.md — Crypto helpers + schema migration + encrypt on save (db.py, requirements.txt)
+- [ ] 03-02-PLAN.md — Unit test scaffold: 7 tests covering CRED-01 through CRED-04
+- [ ] 03-03-PLAN.md — connector.py + panels/base.py: decrypt at connection time, session_key threading
+- [ ] 03-04-PLAN.md — device_manager.py: decrypt on form load, encrypt on save (anti double-encrypt)
+- [ ] 03-05-PLAN.md — main.py: login-time key derivation, migration trigger, full wiring
+- [ ] 03-06-PLAN.md — Functional verification checkpoint
+
 **Success Criteria:**
 1. SQLite `devices` table stores ciphertext for `password` and `enable_pass`, not plaintext
 2. Saving a device encrypts both password fields; loading decrypts on-demand for connection only
