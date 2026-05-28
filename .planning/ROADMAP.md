@@ -23,13 +23,13 @@ passwords are migrated automatically on first login.
 Plans:
 **Wave 1**
 
-- [ ] 03-01-PLAN.md — Crypto helpers + schema migration + encrypt on save (db.py, requirements.txt)
+- [x] 03-01-PLAN.md — Crypto helpers + schema migration + encrypt on save (db.py, requirements.txt)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 03-02-PLAN.md — Unit test scaffold: 7 tests covering CRED-01 through CRED-04
-- [ ] 03-03-PLAN.md — connector.py + panels/base.py: decrypt at connection time, session_key threading
-- [ ] 03-04-PLAN.md — device_manager.py: decrypt on form load, encrypt on save (anti double-encrypt)
+- [x] 03-02-PLAN.md — Unit test scaffold: 7 tests covering CRED-01 through CRED-04
+- [x] 03-03-PLAN.md — connector.py + panels/base.py: decrypt at connection time, session_key threading
+- [x] 03-04-PLAN.md — device_manager.py: decrypt on form load, encrypt on save (anti double-encrypt)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
