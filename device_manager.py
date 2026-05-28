@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 import db
+from db import decrypt_field
 
 
 PLATFORMS = ["ios", "iosxe", "iosxr", "nxos", "eos", "junos"]
@@ -63,7 +64,7 @@ class DeviceFormWidget(QWidget):
         self.save_btn.clicked.connect(self._on_save)
         self.clear_btn.clicked.connect(self.clear)
 
-    def load_device(self, device: dict):
+    def load_device(self, device: dict, session_key: bytes = None):
         self._device_id = device["id"]
         self.name_edit.setText(device["name"])
         self.host_edit.setText(device["hostname"])
@@ -73,8 +74,10 @@ class DeviceFormWidget(QWidget):
             self.platform_box.setCurrentIndex(idx)
         self.port_spin.setValue(device["port"])
         self.user_edit.setText(device["username"])
-        self.pass_edit.setText(device["password"])
-        self.enable_edit.setText(device.get("enable_pass", ""))
+        _pw = decrypt_field(session_key, device["password"]) if session_key else device["password"]
+        self.pass_edit.setText(_pw if _pw is not None else "")
+        _ep = decrypt_field(session_key, device.get("enable_pass", "")) if session_key else device.get("enable_pass", "")
+        self.enable_edit.setText(_ep if _ep is not None else "")
         self.notes_edit.setPlainText(device.get("notes", ""))
 
     def clear(self):
@@ -118,8 +121,9 @@ class DeviceManagerDialog(QDialog):
 
     devices_changed = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, session_key: bytes):
         super().__init__(parent)
+        self._session_key = session_key
         self.setWindowTitle("Device Manager")
         self.setMinimumSize(800, 500)
         self._build_ui()
@@ -174,7 +178,7 @@ class DeviceManagerDialog(QDialog):
         dev_id = item.data(Qt.ItemDataRole.UserRole)
         device = db.get_device(dev_id)
         if device:
-            self.form.load_device(device)
+            self.form.load_device(device, session_key=self._session_key)
 
     def _save_device(self, payload: dict):
         if payload["id"] is None:
