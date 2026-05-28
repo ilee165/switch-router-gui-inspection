@@ -20,16 +20,27 @@ passwords are migrated automatically on first login.
 **Files in scope:** `db.py`, `connector.py`, `device_manager.py`, `main.py`, `requirements.txt`
 
 **Plans:** 6 plans across 4 waves
-
 Plans:
+**Wave 1**
+
 - [ ] 03-01-PLAN.md — Crypto helpers + schema migration + encrypt on save (db.py, requirements.txt)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 03-02-PLAN.md — Unit test scaffold: 7 tests covering CRED-01 through CRED-04
 - [ ] 03-03-PLAN.md — connector.py + panels/base.py: decrypt at connection time, session_key threading
 - [ ] 03-04-PLAN.md — device_manager.py: decrypt on form load, encrypt on save (anti double-encrypt)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 03-05-PLAN.md — main.py: login-time key derivation, migration trigger, full wiring
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 03-06-PLAN.md — Functional verification checkpoint
 
 **Success Criteria:**
+
 1. SQLite `devices` table stores ciphertext for `password` and `enable_pass`, not plaintext
 2. Saving a device encrypts both password fields; loading decrypts on-demand for connection only
 3. First login after upgrade detects plaintext passwords and re-encrypts them transparently
@@ -47,6 +58,7 @@ Accepted keys are stored in SQLite and manageable from device settings.
 **Files in scope:** `db.py`, `connector.py`, `device_manager.py` (or new `host_key_dialog.py`)
 
 **Success Criteria:**
+
 1. Connecting to an unknown host raises a dialog showing the key fingerprint (SHA256)
 2. Selecting "Accept" or "Always Trust" stores the key in the `host_keys` table
 3. Selecting "Reject" aborts the connection without storing anything
