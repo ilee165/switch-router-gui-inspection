@@ -185,13 +185,15 @@ class DeviceManagerDialog(QDialog):
             db.add_device(
                 payload["name"], payload["hostname"], payload["ip_address"],
                 payload["platform"], payload["port"], payload["username"],
-                payload["password"], payload["enable_pass"], payload["notes"]
+                payload["password"], payload["enable_pass"], payload["notes"],
+                session_key=self._session_key
             )
         else:
             db.update_device(
                 payload["id"], payload["name"], payload["hostname"], payload["ip_address"],
                 payload["platform"], payload["port"], payload["username"],
-                payload["password"], payload["enable_pass"], payload["notes"]
+                payload["password"], payload["enable_pass"], payload["notes"],
+                session_key=self._session_key
             )
         self.form.clear()
         self._refresh_list()
