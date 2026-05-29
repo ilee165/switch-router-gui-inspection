@@ -6,7 +6,7 @@
 |---|------|--------|--------------|-----------|
 | 1 | connector.py Cleanup | Complete | MAINT-01, BUG-02, DEAD-01 | 2026-05-27 |
 | 2 | Panels Cleanup | Complete | MAINT-02, MAINT-03, BUG-01, DEAD-02 | 2026-05-27 |
-| 3 | Credential Encryption | Pending | CRED-01, CRED-02, CRED-03, CRED-04 | — |
+| 3 | Credential Encryption | Complete | CRED-01, CRED-02, CRED-03, CRED-04 | 2026-05-29 |
 | 4 | SSH Host Key Verification | Pending | SSH-01, SSH-02, SSH-03, SSH-04 | — |
 
 ---
@@ -33,11 +33,11 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 03-05-PLAN.md — main.py: login-time key derivation, migration trigger, full wiring
+- [x] 03-05-PLAN.md — main.py: login-time key derivation, migration trigger, full wiring
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 03-06-PLAN.md — Functional verification checkpoint
+- [x] 03-06-PLAN.md — Functional verification checkpoint
 
 **Success Criteria:**
 
