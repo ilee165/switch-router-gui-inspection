@@ -28,3 +28,10 @@ Thumbs.db
 
 # Planning (local only)
 .planning/
+
+.env/.mcp.json
+
+# Node (not part of this project)
+node_modules/
+package.json
+package-lock.json
