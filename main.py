@@ -99,10 +99,11 @@ class LoginDialog(QDialog):
 # ── Main Window ────────────────────────────────────────────────────────────────
 
 class MainWindow(QMainWindow):
-    def __init__(self, user: dict):
+    def __init__(self, user: dict, session_key: bytes):
         super().__init__()
         self._user = user
         self._selected_device = None
+        self._session_key = session_key
         self.setWindowTitle("RemoteIn")
         self.setMinimumSize(1200, 720)
         self._build_menu()
@@ -212,11 +213,11 @@ class MainWindow(QMainWindow):
         )
         for panel in (self.iface_panel, self.route_panel,
                       self.neighbor_panel, self.arpmac_panel, self.cli_panel):
-            panel.set_device(device)
+            panel.set_device(device, session_key=self._session_key)
         self._set_status(f"Device selected: {device['name']} ({device['hostname']})")
 
     def _open_device_manager(self):
-        dlg = DeviceManagerDialog(self)
+        dlg = DeviceManagerDialog(self, session_key=self._session_key)
         dlg.devices_changed.connect(self._refresh_devices)
         dlg.exec()
 
@@ -240,7 +241,7 @@ def main():
     if login.exec() != QDialog.DialogCode.Accepted:
         sys.exit(0)
 
-    window = MainWindow(user=login.current_user)
+    window = MainWindow(user=login.current_user, session_key=login.session_key)
     window.show()
     sys.exit(app.exec())
 
