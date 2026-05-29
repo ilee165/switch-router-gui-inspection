@@ -64,7 +64,12 @@ class DeviceFormWidget(QWidget):
         self.save_btn.clicked.connect(self._on_save)
         self.clear_btn.clicked.connect(self.clear)
 
-    def load_device(self, device: dict, session_key: bytes = None):
+    def load_device(self, device: dict, *, session_key: bytes):
+        """Populate the form with an existing device record, decrypting credentials.
+
+        session_key is required — omitting it would display raw ciphertext in the
+        password fields and risk double-encryption on save.
+        """
         self._device_id = device["id"]
         self.name_edit.setText(device["name"])
         self.host_edit.setText(device["hostname"])
@@ -74,9 +79,9 @@ class DeviceFormWidget(QWidget):
             self.platform_box.setCurrentIndex(idx)
         self.port_spin.setValue(device["port"])
         self.user_edit.setText(device["username"])
-        _pw = decrypt_field(session_key, device["password"]) if session_key else device["password"]
+        _pw = decrypt_field(session_key, device["password"])
         self.pass_edit.setText(_pw if _pw is not None else "")
-        _ep = decrypt_field(session_key, device.get("enable_pass", "")) if session_key else device.get("enable_pass", "")
+        _ep = decrypt_field(session_key, device.get("enable_pass", ""))
         self.enable_edit.setText(_ep if _ep is not None else "")
         self.notes_edit.setPlainText(device.get("notes", ""))
 
