@@ -38,13 +38,13 @@ def _netmiko_device(device: dict, session_key: bytes) -> dict:
         "password":         _pw,
         "secret":           _ep or "",
         "timeout":          15,
-        "ssh_strict":       False,  # auto-accept unknown host keys
-        "system_host_keys": False,  # don't load system known_hosts file
+        # SSH-01 (host-key fingerprint dialog) is not yet implemented.
+        # Interim safe default: load system known_hosts so only already-trusted
+        # hosts connect. Do NOT set ssh_strict=False — that disables MITM protection.
+        # Remove this comment and add proper host-key verification when SSH-01 ships.
+        "system_host_keys": True,
         "use_keys":         False,  # don't use SSH key files
         "key_file":         None,   # no key file
-        "disabled_algorithms": {
-            "pubkeys": ["rsa-sha2-256", "rsa-sha2-512"],  # fall back to legacy RSA
-        },
     }
 
 
