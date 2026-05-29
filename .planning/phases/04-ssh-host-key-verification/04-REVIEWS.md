@@ -1,13 +1,13 @@
 ---
 phase: 4
-source: Phase 3 retrospective (03-REVIEWS.md)
+source: Phase 3 retrospective (03-REVIEWS.md) + Phase 4 pre-plan design review
 reviewers: [gemini, claude]
-reviewed_at: 2026-05-29T14:25:00-04:00
-review_type: forward_guidance
+reviewed_at: 2026-05-29T15:44:00-04:00
+review_type: forward_guidance + pre_plan_design_review
 note: >
-  Phase 4 has no completed plans yet. This REVIEWS.md carries forward the
-  Phase 4-specific planning action items produced by the Phase 3 cross-AI
-  retrospective review. Apply all items below to every Phase 4 plan.
+  Part 1: Phase 4-specific planning action items from the Phase 3 cross-AI
+  retrospective. Part 2: Gemini pre-plan design review of CONTEXT.md +
+  decisions before any PLAN.md files existed. Both parts bind every Phase 4 plan.
 ---
 
 # Cross-AI Review Guidance — Phase 4: SSH Host Key Verification
@@ -135,3 +135,126 @@ These risks are new to Phase 4 and not covered by Phase 3 patterns:
   specify the exact format shown in the dialog.
 - **Dialog lifecycle:** If the user closes the fingerprint dialog with the
   window X button (not Accept/Reject), the plan must specify what happens.
+
+---
+
+## Part 2: Gemini Pre-Plan Design Review
+
+> **Reviewer:** Gemini CLI  
+> **Review type:** Pre-plan design review (CONTEXT.md + decisions; no PLAN.md files existed)  
+> **Reviewed at:** 2026-05-29T15:44:00-04:00
+
+### Summary
+
+The design for Phase 4 is architecturally sound and prioritizes security over
+convenience by enforcing modal, blocking dialogs for unknown or changed host keys.
+The decision to treat "Accept" and "Always Trust" identically simplifies the
+implementation for a single-user local tool without compromising the security model.
+The primary technical challenge lies in the orchestration between the background SSH
+thread (`FetchWorker`), the `connector.py` abstraction, and the main GUI thread,
+while respecting the strict separation of concerns between the database and the
+connection logic.
+
+### Strengths
+
+- Security posture is correct: modal blocking dialogs, explicit user decision
+  required, no silent acceptance of unknown or changed keys
+- D-04 (X button = Reject) is an excellent safe-default decision
+- D-01 (Accept = Always Trust) is the right simplification for a single-user local tool
+- SHA256:Base64 fingerprint format matches what network engineers already know from OpenSSH/PuTTY
+- Re-using `make_table()` for SSH-04 correctly avoids reinventing styled table widgets
+
+### Concerns
+
+- **Thread Deadlock Risk (HIGH):** The Paramiko `MissingHostKeyPolicy` will be
+  triggered inside the `FetchWorker` thread. Since this thread needs to wait for a
+  user response from the main GUI thread, a simple signal/slot mechanism won't
+  suffice because the SSH connection is synchronous and blocking. If not handled
+  with precision, this will freeze the worker or the entire UI.
+
+- **Architectural Coupling (MEDIUM):** The "no DB in connector" and "no GUI in
+  connector" rules create a "three-body problem." `connector.py` needs host keys
+  to verify them, but it can't fetch them directly. A clean dependency injection
+  pattern (e.g., passing a verifier interface/callable) is required to avoid
+  breaking these architectural boundaries.
+
+- **Netmiko Abstraction Limits (MEDIUM):** Netmiko wraps Paramiko's connection
+  logic. Injecting a custom `MissingHostKeyPolicy` usually requires reaching into
+  Netmiko's internal `paramiko_kwargs`. The plan must verify this injection
+  works *before* the socket is opened — not all Netmiko versions expose this
+  cleanly.
+
+- **Duplicate Key Records (LOW):** Devices reachable via multiple IPs/hostnames
+  will result in multiple prompts and DB entries. While cryptographically correct,
+  this may be confusing in a device-centric UI if the user expects one key per
+  Device object.
+
+### Suggestions
+
+- **Synchronization Strategy:** Use `QtCore.QMetaObject.invokeMethod` with
+  `Qt.ConnectionType.BlockingQueuedConnection` to call the dialog from the
+  background thread. This allows the background thread to safely block waiting
+  for the user's Accept/Reject response before continuing the SSH handshake.
+
+- **Host Key Verifier Interface:** Define a `HostKeyVerifier` callable or
+  interface. The `FetchWorker` provides the implementation (handles `db.py` lookup
+  + UI signaling). `connector.py` receives it as an argument and calls it — never
+  imports `db.py` or PyQt6 directly. This resolves the three-body problem cleanly.
+
+- **Schema Unique Constraint:** Add a `UNIQUE(device_id, hostname, port, key_type)`
+  constraint to the `host_keys` table. This makes the "Update Key"
+  (DELETE + INSERT) logic atomic and prevents logical duplicates.
+
+- **Store Raw Key Blob:** Store the actual public key `key_blob` in the database
+  (already in the proposed schema). Ensure Paramiko verification uses the raw
+  blob for cryptographic comparison, not just the fingerprint string.
+
+- **Status Bar Specificity:** When connection is rejected via dialog, bubble up
+  the specific reason ("User rejected host key" vs "Host key mismatch") so the
+  status bar notice at D-07 is accurate and actionable.
+
+### Risk Assessment
+
+**Risk Level: MEDIUM**
+
+The security logic is robust, but the **cross-thread blocking dialog** pattern is
+a classic source of UI freezes or deadlocks in PyQt6. The success of this phase
+depends on a disciplined synchronization pattern between `FetchWorker` and the GUI
+thread. Additionally, the strict separation of `connector.py` from `db.py` requires
+a clean dependency injection strategy to maintain architectural integrity.
+
+---
+
+## Consensus Summary (Phase 3 Retrospective + Gemini Design Review)
+
+### Agreed Strengths
+- Security-first defaults throughout: reject on ambiguity, no silent acceptance
+- Reuse of established patterns (`make_table`, `QTabWidget`, keyword-only args)
+- Dialog UX matches network engineer expectations (OpenSSH/PuTTY fingerprint format)
+
+### Agreed Top Concerns
+
+1. **Cross-thread dialog synchronization (HIGH)** — Both reviews flag this as the
+   highest-risk implementation problem. The plan must specify the exact Qt
+   mechanism (`BlockingQueuedConnection` or `threading.Event`) before any code
+   is written.
+
+2. **Dependency injection for connector.py (MEDIUM)** — `connector.py` cannot
+   import `db.py` or PyQt6. The plan must name the injection boundary explicitly
+   (a callable/verifier passed as a parameter).
+
+3. **Netmiko `paramiko_kwargs` injection (MEDIUM)** — Verify the exact Netmiko
+   API for injecting a custom `MissingHostKeyPolicy` before finalizing the plan.
+   Document the Netmiko version constraint.
+
+4. **Every failure path needs a specified UI response (Phase 3 lesson)** —
+   "Non-fatal" is not a specification. Each catch block must name what the user
+   sees.
+
+### Binding Items for Every Phase 4 Plan
+1. Keyword-only args for all security params — no defaults on `key_blob`, `fingerprint`, etc.
+2. Cross-thread dialog mechanism named explicitly in the plan (not deferred to implementer)
+3. `host_keys` UNIQUE constraint on `(device_id, hostname, port, key_type)`
+4. Adversarial tests: reject path, tampered row, dialog cancelled
+5. connector.py security audit sub-task in any plan that touches `connector.py`
+6. Verification checkpoint includes security posture check (key not stored after Reject)
