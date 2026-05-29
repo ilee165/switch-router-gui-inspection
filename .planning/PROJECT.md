@@ -46,10 +46,10 @@ plaintext, and SSH connections verify server identity before trusting them.
 
 | ID | Description | Phase | Status |
 |----|-------------|-------|--------|
-| CRED-01 | Device passwords encrypted at rest in SQLite (AES-256 via Fernet) | 3 | Pending |
-| CRED-02 | Encryption key derived from login password (PBKDF2) — never stored | 3 | Pending |
-| CRED-03 | Existing plaintext passwords migrated to encrypted form on first login | 3 | Pending |
-| CRED-04 | Decrypted password exists only in memory during a connection | 3 | Pending |
+| CRED-01 | Device passwords encrypted at rest in SQLite (AES-256 via Fernet) | 3 | Validated in Phase 3: Credential Encryption |
+| CRED-02 | Encryption key derived from login password (PBKDF2) — never stored | 3 | Validated in Phase 3: Credential Encryption |
+| CRED-03 | Existing plaintext passwords migrated to encrypted form on first login | 3 | Validated in Phase 3: Credential Encryption |
+| CRED-04 | Decrypted password exists only in memory during a connection | 3 | Validated in Phase 3: Credential Encryption |
 | SSH-01 | First connect to unknown host shows fingerprint dialog (Accept / Reject / Always Trust) | 4 | Pending |
 | SSH-02 | Accepted host keys stored in SQLite `host_keys` table | 4 | Pending |
 | SSH-03 | Reconnect with changed host key triggers a warning dialog before proceeding | 4 | Pending |
@@ -57,7 +57,7 @@ plaintext, and SSH connections verify server identity before trusting them.
 
 ## Current State
 
-Security milestone v1.1 started 2026-05-27. No phases complete yet.
+Phase 3 complete (2026-05-29) — credential encryption fully implemented and verified. Device passwords stored as Fernet ciphertext; key derived from login password via PBKDF2-HMAC-SHA256 (600k iterations), never persisted. Migration runs silently on first login. Phase 4 (SSH host key verification) is next.
 
 ---
-*Last updated: 2026-05-27 — start of Security milestone v1.1*
+*Last updated: 2026-05-29 — Phase 3 Credential Encryption complete*
