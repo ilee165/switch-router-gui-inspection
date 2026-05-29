@@ -25,6 +25,7 @@ class LoginDialog(QDialog):
         self.setFixedSize(480, 400)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.current_user = None
+        self.session_key = None
         self._build_ui()
 
     def _build_ui(self):
@@ -71,7 +72,14 @@ class LoginDialog(QDialog):
         pwd  = self.pass_input.text()
         result = db.verify_user(user, pwd)
         if result:
+            salt = db.get_or_create_salt(result["id"])
+            session_key = db.derive_session_key(pwd, salt)
+            try:
+                db.migrate_plaintext_passwords(session_key)
+            except Exception:
+                pass  # Non-fatal: unencrypted rows remain readable; login proceeds
             self.current_user = result
+            self.session_key = session_key
             self.accept()
         else:
             self.error_lbl.setText("Invalid credentials.")
