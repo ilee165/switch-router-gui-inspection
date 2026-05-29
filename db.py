@@ -77,7 +77,12 @@ def _is_fernet_token(value: str) -> bool:
     if not value.startswith('gAAAA'):
         return False
     try:
-        return len(base64.urlsafe_b64decode(value + '==')) >= 57
+        raw = base64.urlsafe_b64decode(value + '==')
+        # Check both minimum length and the Fernet version byte (0x80).
+        # This eliminates false positives from non-token strings that happen
+        # to start with 'gAAAA' — a genuine plaintext password starting with
+        # 'gAAAA' would not have 0x80 as its first decoded byte.
+        return len(raw) >= 57 and raw[0] == 0x80
     except Exception:
         return False
 
@@ -171,7 +176,19 @@ def get_or_create_salt(user_id: int) -> bytes:
             "UPDATE users SET encryption_salt = ? WHERE id = ?",
             (salt.hex(), user_id),
         )
-        return salt
+    # Re-read to confirm the write committed before returning.
+    # If the commit failed (disk full, locked DB), the salt bytes were never
+    # persisted — returning them would derive a key that can never be
+    # reproduced on next login, making all encrypted passwords undecryptable.
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT encryption_salt FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if not (row and row["encryption_salt"]):
+            raise RuntimeError(
+                "Failed to persist encryption salt — cannot derive session key"
+            )
+        return bytes.fromhex(row["encryption_salt"])
 
 
 def migrate_plaintext_passwords(session_key: bytes) -> int:
@@ -213,14 +230,28 @@ def migrate_plaintext_passwords(session_key: bytes) -> int:
 
 # ── User functions ─────────────────────────────────────────────────────────────
 
+# Pre-computed dummy hash for timing-safe username enumeration defense.
+# When the username does not exist, bcrypt.checkpw runs against this hash
+# so the response time is indistinguishable from a wrong-password attempt.
+_DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt()).decode()
+
+
 def verify_user(username: str, password: str):
-    """Return user row if credentials valid, else None."""
+    """Return user row if credentials valid, else None.
+
+    Always runs bcrypt.checkpw — even for unknown usernames — to prevent
+    timing-based username enumeration attacks.
+    """
     with get_conn() as conn:
         row = conn.execute(
             "SELECT * FROM users WHERE username = ?", (username,)
         ).fetchone()
-    if row and bcrypt.checkpw(password.encode(), row["password"].encode()):
-        return dict(row)
+    if row:
+        if bcrypt.checkpw(password.encode(), row["password"].encode()):
+            return dict(row)
+    else:
+        # Run bcrypt anyway to prevent username enumeration via timing
+        bcrypt.checkpw(password.encode(), _DUMMY_HASH.encode())
     return None
 
 def create_user(username: str, password: str, role: str = "operator"):
