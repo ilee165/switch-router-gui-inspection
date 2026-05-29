@@ -75,9 +75,15 @@ class LoginDialog(QDialog):
             salt = db.get_or_create_salt(result["id"])
             session_key = db.derive_session_key(pwd, salt)
             try:
-                db.migrate_plaintext_passwords(session_key)
-            except Exception:
-                pass  # Non-fatal: unencrypted rows remain readable; login proceeds
+                count = db.migrate_plaintext_passwords(session_key)
+            except Exception as exc:
+                _migrated = locals().get("count", "some")
+                QMessageBox.warning(
+                    self,
+                    "Migration Warning",
+                    f"Could not encrypt {_migrated} device password(s). "
+                    f"Affected devices may fail to connect.\n\nDetail: {exc}"
+                )
             self.current_user = result
             self.session_key = session_key
             self.accept()
