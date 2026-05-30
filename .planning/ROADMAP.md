@@ -7,7 +7,7 @@
 | 1 | connector.py Cleanup | Complete | MAINT-01, BUG-02, DEAD-01 | 2026-05-27 |
 | 2 | Panels Cleanup | Complete | MAINT-02, MAINT-03, BUG-01, DEAD-02 | 2026-05-27 |
 | 3 | Credential Encryption | Complete | CRED-01, CRED-02, CRED-03, CRED-04 | 2026-05-29 |
-| 4 | SSH Host Key Verification | 6/6 | Complete   | 2026-05-30 |
+| 4 | SSH Host Key Verification | 6/6 | Complete    | 2026-05-30 |
 
 ---
 
