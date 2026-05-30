@@ -80,9 +80,10 @@ NO_ENABLE_PLATFORMS = {"eos", "junos"}
 def _netmiko_device(device: dict, session_key: bytes, verifier_fn=None) -> dict:
     """Build Netmiko connection dict from device record, decrypting credentials.
 
-    verifier_fn: optional callable passed to RemoteInHostKeyPolicy. When None,
-    _connect_with_policy() falls back to a standard ConnectHandler (no custom
-    policy). For production use, always supply a verifier_fn.
+    verifier_fn: callable forwarded to _connect_with_policy(). If None,
+    _connect_with_policy() raises RuntimeError (fail closed — no unverified
+    connections allowed). Tests that intentionally bypass host key verification
+    must pass an explicit stub, e.g. ``lambda **kw: "accept_once"``, not None.
     """
     _pw = decrypt_field(session_key, device["password"])
     _ep = decrypt_field(session_key, device.get("enable_pass", ""))
@@ -174,9 +175,11 @@ def _genie_fetch(device: dict, cmd: str, session_key: bytes) -> dict | None:
 def _connect_with_policy(netmiko_kwargs: dict, verifier_fn) -> ConnectHandler:
     """Open a Netmiko connection, injecting RemoteInHostKeyPolicy when a verifier is provided.
 
-    When verifier_fn is None: falls back to standard ConnectHandler (no custom policy).
-    This can occur during partial wiring or in test contexts. Production code should
-    always supply a verifier_fn.
+    When verifier_fn is None: raises RuntimeError (fail closed). This is a security
+    guard — production connections must always supply a verifier_fn so that host key
+    verification cannot be silently bypassed. Tests that intentionally skip host key
+    verification must pass an explicit stub verifier_fn (e.g. ``lambda **kw: "accept_once"``),
+    not None.
 
     When verifier_fn is provided:
       1. Instantiate RemoteInHostKeyPolicy with the verifier and the connection port.
@@ -190,7 +193,12 @@ def _connect_with_policy(netmiko_kwargs: dict, verifier_fn) -> ConnectHandler:
     which emits it as error(str(exc)) to the status bar.
     """
     if verifier_fn is None:
-        return ConnectHandler(**netmiko_kwargs)
+        raise RuntimeError(
+            "Host key verification is required: no verifier_fn supplied to "
+            "_connect_with_policy. This is a security guard — production connections "
+            "must pass a verifier_fn. Tests bypassing verification must pass an "
+            "explicit stub (e.g. lambda **kw: 'accept_once'), not None."
+        )
 
     port = netmiko_kwargs.get("port", 22)
     policy = RemoteInHostKeyPolicy(verifier_fn, port=port)

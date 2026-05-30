@@ -223,12 +223,18 @@ class MainWindow(QMainWindow):
         self.device_header.setText(
             f"{device['name'].upper()}  ·  {device['hostname']}  ·  {device['platform'].upper()}"
         )
-        # Update verifier's device_id so DB key lookups key on the right device row.
-        self._verifier.device_id = device["id"]
+        # Build a per-device closure that injects device_id at the call site.
+        # Each device selection produces a fresh closure capturing device["id"],
+        # so concurrent panel fetches and mid-fetch device switches cannot
+        # cross-write a shared mutable verifier.device_id attribute (which no
+        # longer exists — see host_key_dialog.py HostKeyVerifier.__init__).
+        verifier_fn = lambda **kwargs: self._verifier.verify_host_key(
+            device_id=device["id"], **kwargs
+        )
         for panel in (self.iface_panel, self.route_panel,
                       self.neighbor_panel, self.arpmac_panel, self.cli_panel):
             panel.set_device(device, session_key=self._session_key,
-                             verifier_fn=self._verifier.verify_host_key)
+                             verifier_fn=verifier_fn)
         self._set_status(f"Device selected: {device['name']} ({device['hostname']})")
 
     def _open_device_manager(self):
