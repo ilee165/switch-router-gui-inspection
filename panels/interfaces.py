@@ -21,7 +21,7 @@ class InterfacesPanel(BasePanel):
         layout.addWidget(self.raw)
 
     def _run_fetch(self):
-        self._start_worker(connector.get_interfaces, self._device, self._session_key)
+        self._start_worker(connector.get_interfaces, self._device, self._session_key, self._verifier_fn)
 
     def _on_result(self, data):
         self.table.setRowCount(0)

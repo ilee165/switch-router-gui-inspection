@@ -39,7 +39,7 @@ class CliPanel(BasePanel):
             self.status_message.emit("Enter a command first.")
             self._on_done()
             return
-        self._start_worker(connector.run_cli_command, self._device, cmd, self._session_key)
+        self._start_worker(connector.run_cli_command, self._device, cmd, self._session_key, self._verifier_fn)
 
     def _on_result(self, data: str):
         cmd = self.cmd_input.text().strip()
