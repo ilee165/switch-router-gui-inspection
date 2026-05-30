@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+
+import paramiko
 from netmiko import ConnectHandler, NetmikoTimeoutException, NetmikoAuthenticationException
 from db import decrypt_field
 
@@ -10,6 +13,56 @@ try:
     GENIE_AVAILABLE = True
 except ImportError:
     GENIE_AVAILABLE = False
+
+
+class RemoteInHostKeyPolicy(paramiko.client.MissingHostKeyPolicy):
+    """
+    Custom Paramiko host key policy that delegates the accept/reject decision
+    to an injected verifier_fn callable.
+
+    The verifier_fn is called with keyword arguments:
+        hostname  — the remote hostname string
+        port      — the port (captured at construction; Paramiko does not pass it)
+        key_type  — e.g. 'ssh-ed25519', 'ecdsa-sha2-nistp256', 'ssh-rsa'
+        fingerprint — SHA256:Base64 string (key.fingerprint property, Paramiko 3.x+)
+        key_blob  — base64-encoded full public key bytes for DB storage
+
+    The verifier_fn must return one of:
+        "accept_once"  — allow this connection, do not persist to DB
+        "always_trust" — allow this connection (verifier already persisted to DB)
+        "reject"       — deny connection (raises paramiko.SSHException)
+        <any other>    — treated as "reject" (raises paramiko.SSHException)
+
+    If the verifier_fn raises an exception, it propagates and becomes a
+    Netmiko connection error caught by FetchWorker.
+    """
+
+    def __init__(self, verifier_fn, *, port: int):
+        self._verifier_fn = verifier_fn
+        self._port = port
+
+    def missing_host_key(self, client, hostname, key):
+        """Called by Paramiko when a host key is not in the trusted set."""
+        key_type_str = key.get_name()
+        # Use .fingerprint property (SHA256:Base64) — NOT key.get_fingerprint()
+        # which returns 16 raw MD5 bytes. SHA256 is the modern standard.
+        fingerprint_str = key.fingerprint
+        # Full public key bytes as base64 — used for exact cryptographic comparison
+        # and DB storage. Raw bytes never stored directly.
+        key_blob_b64 = base64.b64encode(key.asbytes()).decode("ascii")
+
+        result = self._verifier_fn(
+            hostname=hostname,
+            port=self._port,
+            key_type=key_type_str,
+            fingerprint=fingerprint_str,
+            key_blob=key_blob_b64,
+        )
+
+        if result in ("accept_once", "always_trust"):
+            return  # Paramiko accepts the connection
+        # "reject" or any unexpected value → deny
+        raise paramiko.SSHException("Host key rejected by user")
 
 
 PLATFORM_MAP = {
