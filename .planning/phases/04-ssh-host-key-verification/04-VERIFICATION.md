@@ -1,8 +1,10 @@
 ---
 phase: 04-ssh-host-key-verification
 verified: 2026-05-30T04:06:28Z
+re_verified: 2026-05-30T13:31:00Z
 status: human_needed
 score: 8/8 must-haves verified
+remediation_score: 11/11 remediation must-haves verified
 overrides_applied: 0
 human_verification:
   - test: "Connect to an unknown SSH host and confirm the first-connect dialog appears"
@@ -186,3 +188,55 @@ The `from db import decrypt_field` in `connector.py` is a pre-Phase-4 import req
 
 _Verified: 2026-05-30T04:06:28Z_
 _Verifier: Claude (gsd-verifier)_
+
+---
+
+## Remediation Verification (Plans 04-07 + 04-08)
+
+**Re-verified:** 2026-05-30T13:31:00Z
+**Plans executed:** 04-07 (concurrency + fail-closed), 04-08 (DB integrity + UX)
+**Status:** All automated must-haves PASS
+
+### 04-07 Must-Haves
+
+| # | Must-Have | Check | Status |
+|---|-----------|-------|--------|
+| 1 | `device_id` is keyword-only on `verify_host_key` | `inspect.signature` confirms KEYWORD_ONLY | PASS |
+| 2 | `self.device_id` attribute removed from HostKeyVerifier | Source scan: only appears in a removal comment | PASS |
+| 3 | `self._pending` is `dict[int, dict]` keyed by `threading.get_ident()` | `threading.get_ident` confirmed in source | PASS |
+| 4 | `self._pending_lock = threading.Lock()` guards all pending access | `_pending_lock` confirmed in source | PASS |
+| 5 | `_connect_with_policy` raises `RuntimeError` when `verifier_fn is None` | `inspect.getsource` confirms `RuntimeError` + `verifier_fn is None` | PASS |
+| 6 | Per-device closure in `main.py` (`lambda **kwargs: self._verifier.verify_host_key(device_id=device["id"], **kwargs)`) | Source confirms; old `self._verifier.device_id = device["id"]` removed | PASS |
+| 7 | `tests/test_verifier_concurrency.py` — 3 tests pass | `python tests/test_verifier_concurrency.py` → 3 PASS | PASS |
+| 8 | `tests/test_wiring.py` — 4 tests still pass (regression) | `python tests/test_wiring.py` → 4 PASS | PASS |
+
+### 04-08 Must-Haves
+
+| # | Must-Have | Check | Status |
+|---|-----------|-------|--------|
+| 1 | `get_conn` executes `PRAGMA foreign_keys = ON` | `inspect.getsource(db.get_conn)` confirms | PASS |
+| 2 | `store_host_key` uses `ON CONFLICT DO UPDATE` (not `INSERT OR REPLACE`) | Source confirms; `INSERT OR REPLACE` absent | PASS |
+| 3 | `_compute_fingerprint(key)` in `connector.py` with Paramiko 2.x/3.x fallback | `_compute_fingerprint` confirmed in source | PASS |
+| 4 | `tests/test_host_keys_integrity.py` — 3 tests pass (FK, upsert PK, import boundary) | `python tests/test_host_keys_integrity.py` → 3 PASS | PASS |
+| 5 | `tests/test_host_keys_db.py` — 7 tests still pass (regression) | `python -m pytest tests/test_host_keys_db.py` → 7 passed | PASS |
+
+### Updated Key Links (supersedes rows from original table)
+
+| From | To | Via | Status |
+|------|----|-----|--------|
+| `MainWindow._on_device_selected` | `HostKeyVerifier.verify_host_key` | Per-device closure `lambda **kwargs: self._verifier.verify_host_key(device_id=device["id"], **kwargs)` — replaces old `self._verifier.device_id = device["id"]` | VERIFIED |
+| `db.store_host_key` | `host_keys` row | `INSERT ... ON CONFLICT(device_id, hostname, port, key_type) DO UPDATE SET ...` — preserves row PK | VERIFIED |
+
+### Code Review Findings (04-REVIEW.md)
+
+Review is advisory; findings do not block phase completion. Notable items for follow-up:
+
+| ID | Severity | Finding | Disposition |
+|----|----------|---------|-------------|
+| CR-01 | Critical | Genie path bypasses host key verification (Linux/Mac only; Windows uses Netmiko) | Deferred — Genie path is Linux/Mac only, project runs on Windows. Pre-existing architectural gap, not a Phase 4 regression. |
+| CR-02 | Critical | `update_host_key` DB failure silently proceeds as `"always_trust"` | Open — genuine bug in error-handling path. Recommend fixing in a follow-up quick task. |
+| WR-01 | Warning | Thread ID reuse creates stale-signal window (low probability) | Accepted risk — requires human-speed dialog timing coincident with OS tid reuse. |
+| WR-02–05 | Warning | Minor UX/test coverage gaps | Deferred to future quality pass. |
+
+_Re-verified: 2026-05-30T13:31:00Z_
+_Verifier: Claude (gsd-executor + manual checks)_

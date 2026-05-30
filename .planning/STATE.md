@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: milestone
 status: completed
-last_updated: "2026-05-30T13:51:05.570Z"
+last_updated: "2026-05-30T13:32:00Z"
 progress:
   total_phases: 2
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 14
-  completed_plans: 11
-  percent: 50
+  completed_plans: 13
+  percent: 100
 ---
 
 # STATE.md — Project State
@@ -17,8 +17,8 @@ progress:
 ## Current Phase
 
 Phase: 04
-Status: Milestone complete
-Last completed: 04-06 — Verification + Adversarial Security Suite (2026-05-30)
+Status: Milestone complete (remediation done)
+Last completed: 04-08 — DB integrity + UX fixes (2026-05-30)
 
 ## Phase Index
 
@@ -34,6 +34,11 @@ Last completed: 04-06 — Verification + Adversarial Security Suite (2026-05-30)
 - Existing plaintext passwords migrated transparently on first login after upgrade
 - verifier_fn injected via set_device() — panels never import host_key_dialog directly
 - from db import decrypt_field in connector.py is architecturally sound: imports only the function, not the module; isolation test passes correctly
+- device_id bound at call site via per-device closure in main.py — HostKeyVerifier holds no shared device_id attribute
+- HostKeyVerifier._pending is per-thread dict keyed by threading.get_ident() guarded by _pending_lock
+- connector._connect_with_policy fails closed (RuntimeError) when verifier_fn is None — no silent unverified connections
+- store_host_key uses ON CONFLICT DO UPDATE upsert — preserves row PK across reconnects
+- PRAGMA foreign_keys = ON in get_conn — FK constraint enforced on every SQLite connection
 
 ## Quick Tasks Completed
 
