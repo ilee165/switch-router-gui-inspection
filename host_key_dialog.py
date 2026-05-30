@@ -65,6 +65,11 @@ class HostKeyVerifier(QObject):
     # port is int — PyQt6 supports int in signal signatures.
     host_key_check_requested = pyqtSignal(str, int, str, str, str, str)
 
+    # Emitted after a "Connect Anyway" decision on a changed key (SSH-03, D-07).
+    # Carries the status bar message string to display. Connected in main.py to
+    # MainWindow._set_status so it is delivered on the main thread.
+    connection_status_note = pyqtSignal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._pending = None   # dict while a check is active; None otherwise
@@ -137,6 +142,12 @@ class HostKeyVerifier(QObject):
         # Clear pending state — must happen before any DB call so a subsequent
         # connection attempt on another thread does not see stale state.
         self._pending = None
+
+        # ── D-07: emit status note for "Connect Anyway" on a changed key ──────
+        # Emitted from the worker thread; Qt routes to main thread via
+        # QueuedConnection because the verifier lives on the main thread.
+        if result == "accept_once" and situation == "changed":
+            self.connection_status_note.emit("Connected (host key mismatch not resolved)")
 
         # ── Persist to DB from worker thread ───────────────────────────────────
         # SQLite is thread-safe in serialized mode (Python's sqlite3 default).

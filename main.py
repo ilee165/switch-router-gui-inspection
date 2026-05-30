@@ -14,6 +14,7 @@ from PyQt6.QtGui import QAction
 
 from device_manager import DeviceManagerDialog
 from panels import InterfacesPanel, RoutingPanel, NeighborPanel, ArpMacPanel, CliPanel
+from host_key_dialog import HostKeyVerifier
 
 
 # ── Login Dialog ───────────────────────────────────────────────────────────────
@@ -110,6 +111,11 @@ class MainWindow(QMainWindow):
         self._user = user
         self._selected_device = None
         self._session_key = session_key
+        # HostKeyVerifier must be created on the main thread so its signals are
+        # processed by the main event loop (QueuedConnection cross-thread safety).
+        self._verifier = HostKeyVerifier(parent=self)
+        self._verifier.host_key_check_requested.connect(self._verifier._show_host_key_dialog)
+        self._verifier.connection_status_note.connect(self._set_status)
         self.setWindowTitle("RemoteIn")
         self.setMinimumSize(1200, 720)
         self._build_menu()
@@ -217,9 +223,12 @@ class MainWindow(QMainWindow):
         self.device_header.setText(
             f"{device['name'].upper()}  ·  {device['hostname']}  ·  {device['platform'].upper()}"
         )
+        # Update verifier's device_id so DB key lookups key on the right device row.
+        self._verifier.device_id = device["id"]
         for panel in (self.iface_panel, self.route_panel,
                       self.neighbor_panel, self.arpmac_panel, self.cli_panel):
-            panel.set_device(device, session_key=self._session_key)
+            panel.set_device(device, session_key=self._session_key,
+                             verifier_fn=self._verifier.verify_host_key)
         self._set_status(f"Device selected: {device['name']} ({device['hostname']})")
 
     def _open_device_manager(self):
