@@ -146,7 +146,9 @@ def test_connection_status_note_emitted_on_connect_anyway():
 
     verifier = HostKeyVerifier()
     verifier.connection_status_note.connect(lambda msg: received_notes.append(msg))
-    verifier.device_id = 1
+    # device_id is no longer a shared mutable attribute on HostKeyVerifier.
+    # It is now passed as a keyword-only argument to verify_host_key() directly,
+    # bound per-connection via a closure in main.py (_on_device_selected).
 
     stored_key = {
         "key_blob": "DIFFERENT_BLOB",          # does not match live blob → changed
@@ -160,21 +162,25 @@ def test_connection_status_note_emitted_on_connect_anyway():
 
         # Simulate the dialog returning "accept_once" (Connect Anyway button).
         # Connect as a real Qt slot so QueuedConnection delivers it on processEvents().
-        def _fake_show_dialog(hostname, port, key_type, fingerprint, key_blob, situation):
+        # tid (int) is now the first argument of the signal (thread identity).
+        def _fake_show_dialog(tid, hostname, port, key_type, fingerprint, key_blob, situation):
             # Verify we are in the "changed" situation.
             assert situation == "changed", f"Expected 'changed', got '{situation}'"
-            if verifier._pending:
-                verifier._pending["result"] = "accept_once"
-                verifier._pending["event"].set()
+            with verifier._pending_lock:
+                record = verifier._pending.get(tid)
+            if record is not None:
+                record["result"] = "accept_once"
+                record["event"].set()
 
         verifier.host_key_check_requested.connect(_fake_show_dialog)
 
         # Call verify_host_key from a worker thread (as Netmiko would do) so
-        # threading.Event blocks correctly.
+        # threading.Event blocks correctly. device_id is now a keyword-only param.
         result_holder: list[str] = []
 
         def _worker():
             r = verifier.verify_host_key(
+                device_id=1,
                 hostname="10.0.0.1",
                 port=22,
                 key_type="ssh-ed25519",

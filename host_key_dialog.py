@@ -48,22 +48,26 @@ class HostKeyVerifier(QObject):
     is connected to _show_host_key_dialog with the default QueuedConnection type,
     which delivers the signal safely across threads via the main event loop.
 
-    Usage (wiring, done in main.py / panel init):
+    Usage (wiring, done in main.py):
         self.verifier = HostKeyVerifier(parent=self)
         self.verifier.host_key_check_requested.connect(
             self.verifier._show_host_key_dialog
         )
 
-    Then pass self.verifier.verify_host_key as verifier_fn to connector functions.
-    But first call:
-        self.verifier.device_id = device["id"]
-    so the verifier knows which device row to key against.
+    Then build a per-device closure and pass it as verifier_fn:
+        verifier_fn = lambda **kwargs: self.verifier.verify_host_key(
+            device_id=device["id"], **kwargs
+        )
+    This binds device_id at the call site (once per device selection) rather than
+    via a shared mutable attribute, eliminating the concurrent-device-switch race.
     """
 
-    # Signal: hostname, port, key_type, fingerprint, key_blob, situation
+    # Signal: tid, hostname, port, key_type, fingerprint, key_blob, situation
+    # tid is the threading.get_ident() of the calling worker thread, used to key
+    # into self._pending so concurrent calls never cross-write each other's state.
     # situation is "new" (SSH-01 first connect) or "changed" (SSH-03 key mismatch)
     # port is int — PyQt6 supports int in signal signatures.
-    host_key_check_requested = pyqtSignal(str, int, str, str, str, str)
+    host_key_check_requested = pyqtSignal(int, str, int, str, str, str, str)
 
     # Emitted after a "Connect Anyway" decision on a changed key (SSH-03, D-07).
     # Carries the status bar message string to display. Connected in main.py to
@@ -72,31 +76,36 @@ class HostKeyVerifier(QObject):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._pending = None   # dict while a check is active; None otherwise
-        self.device_id: int | None = None
+        # Per-thread pending state, keyed by threading.get_ident().
+        # Replaces the previous single-slot self._pending which was a race condition:
+        # two concurrent worker threads could overwrite each other's dialog result.
+        self._pending: dict[int, dict] = {}
+        self._pending_lock = threading.Lock()
+        # self.device_id intentionally removed — device_id is now a call-scoped
+        # keyword-only parameter on verify_host_key(), bound per-connection in
+        # main.py via a closure. A shared mutable attribute was a race condition
+        # when two panels fetched concurrently after a device switch.
 
     # ── Worker-thread entry point ──────────────────────────────────────────────
 
-    def verify_host_key(self, *, hostname: str, port: int, key_type: str,
-                        fingerprint: str, key_blob: str) -> str:
+    def verify_host_key(self, *, device_id: int, hostname: str, port: int,
+                        key_type: str, fingerprint: str, key_blob: str) -> str:
         """Called from the Netmiko worker thread.  Blocks until user responds.
 
         All parameters are keyword-only (the * separator) so they cannot be
         supplied positionally — matches the calling convention in connector.py
         RemoteInHostKeyPolicy.missing_host_key().
 
+        device_id is supplied by the per-device closure built in main.py
+        (_on_device_selected), NOT read from a shared instance attribute.
+        This makes concurrent calls for different devices safe: each call
+        carries its own device_id independently.
+
         Returns:
             "accept_once"  — allow connection, DB NOT updated.
             "always_trust" — allow connection, key written/updated in DB.
             "reject"       — deny connection, raise SSHException upstream.
         """
-        device_id = self.device_id
-        if device_id is None:
-            # Safety guard: device_id must be set before calling verify_host_key.
-            # Without it we cannot look up or persist the key. Reject to be safe.
-            print("[HostKeyVerifier] WARNING: device_id not set; rejecting connection.")
-            return "reject"
-
         # ── SSH-02 happy path: known matching key ──────────────────────────────
         stored = db.get_host_key(
             device_id=device_id,
@@ -114,34 +123,40 @@ class HostKeyVerifier(QObject):
         else:
             situation = "changed"      # SSH-03: stored key does not match
 
-        # ── Cross-thread sync setup ────────────────────────────────────────────
+        # ── Cross-thread sync setup (per-thread, keyed by tid) ─────────────────
+        # Each worker thread gets its own entry in self._pending so concurrent
+        # calls cannot overwrite each other's event or result.
+        tid = threading.get_ident()
         event = threading.Event()
-        self._pending = {
-            "event": event,
-            "result": None,
-            # old fingerprint for ChangedKeyDialog (None for first-connect)
-            "stored_fingerprint": stored["fingerprint"] if stored else None,
-        }
+        with self._pending_lock:
+            self._pending[tid] = {
+                "event": event,
+                "result": None,
+                # old fingerprint for ChangedKeyDialog (None for first-connect)
+                "stored_fingerprint": stored["fingerprint"] if stored else None,
+            }
 
         # Emit signal — QueuedConnection delivers this to the main thread's
-        # event loop without blocking the worker.
+        # event loop without blocking the worker. tid is the first argument so
+        # _show_host_key_dialog can look up the right _pending entry.
         self.host_key_check_requested.emit(
-            hostname, port, key_type, fingerprint, key_blob, situation
+            tid, hostname, port, key_type, fingerprint, key_blob, situation
         )
 
         # Block the worker thread until the main thread sets the event.
         fired = event.wait(timeout=30)
 
-        # Read result before clearing _pending.
-        result = (self._pending.get("result") if self._pending else None) or "reject"
+        # Pop our own entry — never touch another thread's record.
+        with self._pending_lock:
+            record = self._pending.pop(tid, None)
+
+        # Read result from the local record (not from self._pending which could
+        # have been mutated by another thread already).
+        result = (record.get("result") if record else None) or "reject"
 
         # Timeout (fired=False) or result still None → reject safely.
         if not fired:
             result = "reject"
-
-        # Clear pending state — must happen before any DB call so a subsequent
-        # connection attempt on another thread does not see stale state.
-        self._pending = None
 
         # ── D-07: emit status note for "Connect Anyway" on a changed key ──────
         # Emitted from the worker thread; Qt routes to main thread via
@@ -186,18 +201,26 @@ class HostKeyVerifier(QObject):
 
     # ── Main-thread slot ───────────────────────────────────────────────────────
 
-    def _show_host_key_dialog(self, hostname: str, port: int, key_type: str,
-                              fingerprint: str, key_blob: str, situation: str) -> None:
+    def _show_host_key_dialog(self, tid: int, hostname: str, port: int,
+                              key_type: str, fingerprint: str, key_blob: str,
+                              situation: str) -> None:
         """Slot connected to host_key_check_requested (runs on the main thread).
 
-        Shows the appropriate modal dialog, stores the user's choice in
-        self._pending["result"], then calls event.set() to unblock the worker.
+        tid identifies which worker thread is waiting, allowing this slot to
+        update only that thread's _pending entry and no other. If the entry is
+        absent (stale signal or timeout already cleared it), returns early.
+
+        Shows the appropriate modal dialog, stores the user's choice in the
+        record["result"], then calls record["event"].set() to unblock the worker.
 
         This method MUST always call event.set() — even if dialog construction
         fails — so the worker thread is never left hanging indefinitely.
         """
-        if self._pending is None:
-            # Safety: nothing is waiting (e.g. stale signal delivery). Ignore.
+        with self._pending_lock:
+            record = self._pending.get(tid)
+
+        if record is None:
+            # Safety: no thread waiting for this tid (stale signal or timeout).
             return
 
         try:
@@ -210,7 +233,7 @@ class HostKeyVerifier(QObject):
                 )
             else:
                 # situation == "changed"
-                old_fp = self._pending.get("stored_fingerprint") or "(unknown)"
+                old_fp = record.get("stored_fingerprint") or "(unknown)"
                 dialog = ChangedKeyDialog(
                     hostname=hostname,
                     port=port,
@@ -220,16 +243,16 @@ class HostKeyVerifier(QObject):
                 )
 
             dialog.exec()   # blocks main thread until user responds (modal)
-            self._pending["result"] = dialog.result_action
+            record["result"] = dialog.result_action
 
         except Exception as exc:
             # Dialog construction failed — reject to keep the system safe.
             print(f"[HostKeyVerifier] dialog error: {exc}")
-            self._pending["result"] = "reject"
+            record["result"] = "reject"
 
         finally:
             # Always unblock the worker — a hanging worker is worse than a reject.
-            self._pending["event"].set()
+            record["event"].set()
 
 
 # ── FirstConnectDialog (SSH-01) ───────────────────────────────────────────────
