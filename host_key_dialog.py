@@ -206,11 +206,17 @@ class HostKeyVerifier(QObject):
                     fingerprint=fingerprint,
                     key_blob=key_blob,
                 )
+                # Remap to "always_trust" only when the DB write succeeded.
+                # RemoteInHostKeyPolicy only understands accept_once / always_trust / reject.
+                result = "always_trust"
             except sqlite3.IntegrityError as exc:
+                # DB write failed — connect once but do not persist.
+                # User will see the changed-key dialog again next connect.
                 print(f"[HostKeyVerifier] update_host_key failed: {exc}")
-            # Remap to "always_trust" — RemoteInHostKeyPolicy only understands
-            # accept_once / always_trust / reject; "update_key" is internal only.
-            result = "always_trust"
+                result = "accept_once"
+                self.connection_status_note.emit(
+                    "Warning: host key could not be saved — mismatch will reappear next connect"
+                )
 
         return result
 
