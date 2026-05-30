@@ -12,6 +12,11 @@ def get_conn ():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    # SQLite disables FK enforcement by default and resets it per-connection.
+    # This PRAGMA must be set here — on every new connection — to enforce the
+    # REFERENCES devices(id) declaration on host_keys and make the IntegrityError
+    # contract in store_host_key accurate.
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 def init_db ():
@@ -337,8 +342,10 @@ def update_device(device_id, name, hostname, ip_address, platform, port, usernam
 def delete_device(device_id: int):
     with get_conn() as conn:
         # Explicitly delete associated host keys before the device row.
-        # PRAGMA foreign_keys is NOT enabled in get_conn(), so the REFERENCES
-        # declaration does not cascade automatically — we must do it here.
+        # PRAGMA foreign_keys = ON is now active in get_conn(), so the REFERENCES
+        # declaration on host_keys would block deletion of a device that still has
+        # host key rows — this explicit DELETE is belt-and-suspenders defense in
+        # depth, and also clears the host_keys rows before the device row is removed.
         # Both DELETEs run inside the same connection context manager and commit
         # atomically: if either fails the whole transaction rolls back.
         conn.execute("DELETE FROM host_keys WHERE device_id = ?", (device_id,))
@@ -350,11 +357,17 @@ def delete_device(device_id: int):
 
 def store_host_key(*, device_id: int, hostname: str, port: int,
                    key_type: str, fingerprint: str, key_blob: str) -> None:
-    """Insert or replace a host key row for the given (device, host, port, key_type) tuple.
+    """Upsert a host key row for the given (device, host, port, key_type) tuple.
 
-    Uses INSERT OR REPLACE so that calling this function twice with the same
-    tuple (e.g. "Always Trust" on first connect, or "Update Key" after a change)
-    replaces the existing row atomically — no separate upsert logic needed.
+    Uses INSERT ... ON CONFLICT(device_id, hostname, port, key_type) DO UPDATE
+    so that calling this function twice with the same UNIQUE tuple updates the
+    existing row in place — the row's primary key and original added_at are
+    preserved. The identity-preserving upsert avoids the PK churn that a
+    delete-and-reinsert strategy would cause. This keeps the SSH-04 audit trail
+    stable across reconnects and key updates.
+
+    The ON CONFLICT target columns exactly match the UNIQUE(device_id, hostname,
+    port, key_type) constraint in the host_keys DDL.
 
     All parameters are keyword-only (the * separator) so security-relevant
     identifiers can never be passed positionally and swapped silently.
@@ -368,14 +381,20 @@ def store_host_key(*, device_id: int, hostname: str, port: int,
         key_blob:    Base64-encoded server public key blob (opaque to this layer).
 
     Raises:
-        sqlite3.IntegrityError: If device_id references a non-existent device.
+        sqlite3.IntegrityError: If device_id references a non-existent device
+            (enforced by PRAGMA foreign_keys = ON in get_conn()).
             Caller (host_key_dialog.py) must catch and show QMessageBox.warning.
     """
     with get_conn() as conn:
         conn.execute(
-            """INSERT OR REPLACE INTO host_keys
+            """INSERT INTO host_keys
                (device_id, hostname, port, key_type, fingerprint, key_blob)
-               VALUES (?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(device_id, hostname, port, key_type)
+               DO UPDATE SET
+                   fingerprint = excluded.fingerprint,
+                   key_blob    = excluded.key_blob,
+                   added_at    = CURRENT_TIMESTAMP""",
             (device_id, hostname, port, key_type, fingerprint, key_blob),
         )
 
