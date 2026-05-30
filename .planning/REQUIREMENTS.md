@@ -31,8 +31,8 @@ Generated: 2026-05-27
 ### SSH Host Key Verification
 
 - [ ] **SSH-01**: On first connect to an unknown host, a dialog shows the server's key fingerprint with Accept / Reject / Always Trust options
-- [ ] **SSH-02**: Accepted host keys are stored persistently in a `host_keys` table in SQLite
-- [ ] **SSH-03**: If a stored host key no longer matches on reconnect, a warning dialog is shown and the user must explicitly accept before connecting
+- [x] **SSH-02**: Accepted host keys are stored persistently in a `host_keys` table in SQLite
+- [x] **SSH-03**: If a stored host key no longer matches on reconnect, a warning dialog is shown and the user must explicitly accept before connecting
 - [ ] **SSH-04**: User can view and delete stored host key entries from device settings
 
 ## Out of Scope
@@ -56,8 +56,8 @@ Generated: 2026-05-27
 | CRED-03 | Phase 3 | Pending |
 | CRED-04 | Phase 3 | Pending |
 | SSH-01 | Phase 4 | Pending |
-| SSH-02 | Phase 4 | Pending |
-| SSH-03 | Phase 4 | Pending |
+| SSH-02 | Phase 4 | Complete |
+| SSH-03 | Phase 4 | Complete |
 | SSH-04 | Phase 4 | Pending |
 
 **Coverage:** 8 active requirements — 8 mapped to phases, 0 unmapped.
