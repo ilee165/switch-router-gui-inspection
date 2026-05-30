@@ -1,9 +1,22 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 
 import paramiko
 from netmiko import ConnectHandler, NetmikoTimeoutException, NetmikoAuthenticationException
+
+# ── DB import boundary (audit checklist item from 04-02 plan) ──────────────────
+# connector.py MAY import pure data/crypto helpers from db.py.
+# decrypt_field is the only current use — it is a stateless crypto helper
+# with no GUI or DB I/O, and does not constitute a layering violation.
+#
+# connector.py MUST NOT import PyQt6 or any other GUI module.
+# connector.py MUST NOT import or call host key DB functions:
+#   store_host_key, get_host_key, update_host_key, delete_host_key,
+#   get_device_host_keys.
+# Host key persistence is the verifier's responsibility, injected via
+# verifier_fn — keeping connector.py GUI-free and persistence-free.
 from db import decrypt_field
 
 
@@ -13,6 +26,30 @@ try:
     GENIE_AVAILABLE = True
 except ImportError:
     GENIE_AVAILABLE = False
+
+
+def _compute_fingerprint(key) -> str:
+    """Return the SHA256:Base64 fingerprint for a Paramiko public key object.
+
+    Paramiko 3.x added a .fingerprint property that returns the unpadded
+    SHA256:Base64 string matching OpenSSH's `ssh-keygen -l -E sha256` format.
+    Paramiko 2.x does not have this property — it only has get_fingerprint()
+    which returns 16 raw MD5 bytes (a different algorithm, incompatible format).
+
+    This helper produces the canonical SHA256:Base64 form on all Paramiko
+    versions so the displayed fingerprint always matches ssh-keygen output,
+    preventing a user from inadvertently approving a mismatched key due to
+    format confusion across library versions.
+
+    The rstrip("=") removes base64 padding to match OpenSSH's unpadded output:
+        SHA256:AbCdEf... (no trailing = signs)
+    """
+    if hasattr(key, "fingerprint"):
+        # Paramiko 3.x — use the built-in property (already SHA256:Base64, unpadded)
+        return key.fingerprint
+    # Paramiko 2.x fallback — compute SHA256 digest manually
+    digest = hashlib.sha256(key.asbytes()).digest()
+    return "SHA256:" + base64.b64encode(digest).decode("ascii").rstrip("=")
 
 
 class RemoteInHostKeyPolicy(paramiko.client.MissingHostKeyPolicy):
@@ -44,9 +81,10 @@ class RemoteInHostKeyPolicy(paramiko.client.MissingHostKeyPolicy):
     def missing_host_key(self, client, hostname, key):
         """Called by Paramiko when a host key is not in the trusted set."""
         key_type_str = key.get_name()
-        # Use .fingerprint property (SHA256:Base64) — NOT key.get_fingerprint()
-        # which returns 16 raw MD5 bytes. SHA256 is the modern standard.
-        fingerprint_str = key.fingerprint
+        # _compute_fingerprint returns SHA256:Base64 (unpadded, matching ssh-keygen).
+        # It uses key.fingerprint on Paramiko 3.x and computes manually on 2.x,
+        # so the displayed fingerprint is consistent across library versions.
+        fingerprint_str = _compute_fingerprint(key)
         # Full public key bytes as base64 — used for exact cryptographic comparison
         # and DB storage. Raw bytes never stored directly.
         key_blob_b64 = base64.b64encode(key.asbytes()).decode("ascii")

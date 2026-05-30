@@ -161,6 +161,21 @@ class HostKeyVerifier(QObject):
         # ── D-07: emit status note for "Connect Anyway" on a changed key ──────
         # Emitted from the worker thread; Qt routes to main thread via
         # QueuedConnection because the verifier lives on the main thread.
+        #
+        # Timing note (Option B — documented best-effort): this emit fires while
+        # Paramiko's missing_host_key() is still executing, which means conn._open()
+        # has not yet returned and SSH authentication (username/password) has not
+        # yet completed. The connection could still fail auth after this point.
+        # The "Connected" wording is therefore best-effort — if auth fails,
+        # FetchWorker will overwrite the status bar with the error message.
+        #
+        # Option A (deferred post-_open emit) was evaluated and rejected for this
+        # milestone: it would require threading an on_connected callback through
+        # _connect_with_policy, all six public connector functions, and the main.py
+        # closures — a cross-cutting change that risks introducing concurrency bugs
+        # in code that was just stabilised by 04-07. The best-effort note is
+        # acceptable because it is always overwritten by a definitive success or
+        # error status from FetchWorker._on_result / _on_error.
         if result == "accept_once" and situation == "changed":
             self.connection_status_note.emit("Connected (host key mismatch not resolved)")
 
