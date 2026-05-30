@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Security
 status: executing
-last_updated: "2026-05-29T21:45:00-04:00"
+last_updated: "2026-05-30T08:10:00.000Z"
 progress:
   total_phases: 2
-  completed_phases: 1
-  total_plans: 6
-  completed_plans: 0
+  completed_phases: 0
+  total_plans: 12
+  completed_plans: 9
   percent: 0
 ---
 
@@ -17,7 +17,8 @@ progress:
 ## Current Phase
 
 Phase: 4
-Status: Executing (Wave 1 of 4 — 0/6 plans complete)
+Status: Executing (Wave 1 of 4 — 4/6 plans complete)
+Last completed: 04-04 — Wire HostKeyVerifier into FetchWorker + Status Bar (2026-05-30)
 
 ## Phase Index
 
@@ -31,6 +32,7 @@ Status: Executing (Wave 1 of 4 — 0/6 plans complete)
 - Encryption key derived from login password via PBKDF2 — no external keystore
 - SSH host key: show fingerprint dialog on first connect (Accept / Reject / Always Trust)
 - Existing plaintext passwords migrated transparently on first login after upgrade
+- verifier_fn injected via set_device() — panels never import host_key_dialog directly
 
 ## Quick Tasks Completed
 
