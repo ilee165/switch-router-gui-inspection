@@ -176,14 +176,14 @@ python main.py
 
 ### Active (this milestone — branch: gsd-security-milestone)
 
-- [ ] CRED-01: Device passwords encrypted at rest in SQLite (AES-256 via Fernet)
-- [ ] CRED-02: Encryption key derived from login password (PBKDF2) — never stored on disk
-- [ ] CRED-03: Existing plaintext passwords migrated to encrypted form on first login
-- [ ] CRED-04: Decrypted password exists in memory only for the duration of a connection
-- [ ] SSH-01: First connect to unknown host shows fingerprint dialog (Accept / Reject / Always Trust)
-- [ ] SSH-02: Accepted host keys stored in SQLite `host_keys` table
-- [ ] SSH-03: Changed host key on reconnect triggers warning dialog before proceeding
-- [ ] SSH-04: User can view and delete stored host keys from device settings
+- [x] CRED-01: Device passwords encrypted at rest in SQLite (AES-256 via Fernet)
+- [x] CRED-02: Encryption key derived from login password (PBKDF2) — never stored on disk
+- [x] CRED-03: Existing plaintext passwords migrated to encrypted form on first login
+- [x] CRED-04: Decrypted password exists in memory only for the duration of a connection
+- [x] SSH-01: First connect to unknown host shows fingerprint dialog (Accept / Reject / Always Trust)
+- [x] SSH-02: Accepted host keys stored in SQLite `host_keys` table
+- [x] SSH-03: Changed host key on reconnect triggers warning dialog before proceeding
+- [x] SSH-04: User can view and delete stored host keys from device settings
 
 ### Deferred
 
