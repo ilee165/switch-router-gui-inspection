@@ -45,6 +45,7 @@ Last completed: 04-08 — DB integrity + UX fixes (2026-05-30)
 | Date | Slug | Description | Commit |
 |------|------|-------------|--------|
 | 2026-05-27 | ospf-textfsm-key-fix | Fix OSPF TextFSM address key mismatch in _populate_ospf_textfsm() | 86df075 |
+| 2026-05-30 | update-host-key-silent-failure | Fix update_host_key IntegrityError silently proceeding as always_trust | 753fcef |
 
 ## Notes
 
