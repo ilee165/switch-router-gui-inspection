@@ -1,260 +1,189 @@
 ---
 phase: 4
-source: Phase 3 retrospective (03-REVIEWS.md) + Phase 4 pre-plan design review
-reviewers: [gemini, claude]
-reviewed_at: 2026-05-29T15:44:00-04:00
-review_type: forward_guidance + pre_plan_design_review
-note: >
-  Part 1: Phase 4-specific planning action items from the Phase 3 cross-AI
-  retrospective. Part 2: Gemini pre-plan design review of CONTEXT.md +
-  decisions before any PLAN.md files existed. Both parts bind every Phase 4 plan.
+reviewers: [gemini, codex]
+reviewed_at: 2026-05-30T08:20:00Z
+plans_reviewed:
+  - 04-01-PLAN.md
+  - 04-02-PLAN.md
+  - 04-03-PLAN.md
+  - 04-04-PLAN.md
+  - 04-05-PLAN.md
+  - 04-06-PLAN.md
+self_cli_skipped: claude
 ---
 
-# Cross-AI Review Guidance — Phase 4: SSH Host Key Verification
+# Cross-AI Plan Review — Phase 4: SSH Host Key Verification
 
-> **Source:** Phase 3 Credential Encryption retrospective (Gemini + Claude).
-> Phase 3 execution produced 9 post-execution findings (3 critical, 4 warnings).
-> The retrospective identified root causes in plan specification quality and
-> produced these binding action items for Phase 4.
-
----
-
-## Action Items for Phase 4 Planning
-
-Apply these constraints to **every Phase 4 plan**:
-
-### 1. Required keyword-only arguments for security params
-
-No optional defaults on security-critical parameters. When a parameter is
-required for correct security behavior, make it keyword-only with no default.
-
-> **Rationale:** Phase 3 CR-03 (double-encryption bug) traced directly to
-> `session_key=None` default. The plan identified the anti-pattern and then
-> specified the exact implementation that enabled it.
-
-**Rule:** If a caller cannot provide the value, that call site is wrong —
-raise at the wrong call site, not deeper in the stack.
-
-### 2. Error contract for every function that can partially fail
-
-Every function spec must include: "on failure, do X (show QMessageBox /
-skip-and-log / raise)." **"Non-fatal" is not a specification.**
-
-> **Rationale:** Phase 3 CR-02 (silent exception swallow in migration) traced
-> to "non-fatal — unencrypted rows remain readable" with no specified UI
-> response. In code, "non-fatal" became "silent failure."
-
-**Rule:** Any plan step that says "catch exception and continue" must specify
-the minimum user-visible feedback (e.g., `QMessageBox.warning(self, 'title', str(e))`).
-
-### 3. In-file security audit when touching connector.py
-
-Any Phase 4 plan modifying `connector.py` must include a sub-task:
-
-> *"Before committing, grep connector.py for `strict_host_key_checking`,
-> `verify=False`, `disabled_algorithms`, `allow_agent=True` and verify none
-> are set to insecure values."*
-
-> **Rationale:** Phase 3 CR-01 (`strict_host_key_checking=False`) and WR-02
-> (legacy algorithm downgrade) were pre-existing in connector.py. Phase 3
-> plans touched the file for security reasons but never audited the file's
-> existing SSH configuration.
-
-### 4. Verification checkpoints must include security verification
-
-Phase 4's verification checkpoint must verify that host key checking
-**actually rejects** unknown hosts — not just that the dialog appears.
-
-> **Rationale:** Phase 3's 03-06-PLAN.md was functional verification only.
-> Four of the seven post-execution findings were not in scope because the
-> plans never specified those behaviors. A security milestone's verification
-> checkpoint must audit security posture of every modified file.
-
-**Required in Phase 4 verification checkpoint:**
-- Attempt connection to mock/test host with unknown key → dialog must appear
-- Attempt connection to mock/test host with *changed* key → warning must appear
-- Attempt connection without user acceptance → connection must abort
-- grep connector.py for insecure SSH config patterns after modification
-
-### 5. Adversarial test category
-
-Phase 4 test plans must include at least one test per new security-critical
-function that tests the **failure path**, not just the success path.
-
-> **Rationale:** Phase 3 test plan verified what the plan said would work,
-> not what could go wrong. All 7 tests could pass while `_is_fernet_token`
-> had a detection bug and migration silently swallowed errors.
-
-**Required adversarial tests for Phase 4:**
-- Changed host key → connection must be blocked (not silently accepted)
-- Rejected host → key must not appear in `host_keys` table
-- `host_keys` table contains tampered key fingerprint → behavior must be defined
-- Dialog cancelled → connection must abort cleanly
-
-### 6. Anti-pattern notes must close the anti-pattern in the spec
-
-If a plan describes a failure mode, the specification must make it
-**impossible** via required args / fail-loud behavior. If the plan says
-"never do X," the spec must make X a compile-time or import-time error.
-
-> **Rationale:** Phase 3 CR-03 was the most preventable finding — the plan
-> identified the anti-pattern verbatim, then specified the exact implementation
-> that enabled it. The warning and the implementation contradicted each other.
-
-**Rule:** Anti-pattern notes in plans are bugs unless accompanied by a
-specification that makes the anti-pattern unreachable.
-
----
-
-## Key Lessons from Phase 3 (Gemini + Claude Consensus)
-
-| Lesson | Mechanism | Phase 4 Application |
-|--------|-----------|---------------------|
-| Permissive API defaults enable silent failures | `session_key=None` → CR-03 | All host key params: keyword-only, no default |
-| Transport security is a separate audit from feature correctness | CR-01, WR-02 missed | Explicit connector.py security audit sub-task |
-| "Non-fatal" without UI spec → silent failure | CR-02 | Every failure path specifies user-visible response |
-| Test plan for happy path only → false confidence | CR-02, WR-04 undetected | Mandatory adversarial test category |
-| Verification checkpoint for features, not security posture | All 7 findings missed | Security verification steps required in 04-06 |
-| Anti-pattern warnings must be spec'd closed | CR-03 self-described | Anti-pattern → required arg or compile-time error |
-
----
-
-## SSH-Specific Planning Risks (Phase 4 Focus)
-
-These risks are new to Phase 4 and not covered by Phase 3 patterns:
-
-- **TOCTOU on host key verification:** The key must be checked immediately
-  before the connection is established, not cached from a previous check.
-- **Netmiko's `AutoAddPolicy` / `RejectPolicy`:** The plan must explicitly
-  specify which Paramiko policy class is used and why `AutoAddPolicy` is
-  prohibited.
-- **`host_keys` table integrity:** The table stores trust decisions. A plan
-  that reads this table must specify behavior when the row is corrupt/missing.
-- **Key fingerprint display format:** SHA256 hex vs Base64 — be explicit.
-  Netmiko/Paramiko use `get_host_key_fingerprint()` returns; the plan must
-  specify the exact format shown in the dialog.
-- **Dialog lifecycle:** If the user closes the fingerprint dialog with the
-  window X button (not Accept/Reject), the plan must specify what happens.
-
----
-
-## Part 2: Gemini Pre-Plan Design Review
-
-> **Reviewer:** Gemini CLI  
-> **Review type:** Pre-plan design review (CONTEXT.md + decisions; no PLAN.md files existed)  
-> **Reviewed at:** 2026-05-29T15:44:00-04:00
+## Gemini Review
 
 ### Summary
 
-The design for Phase 4 is architecturally sound and prioritizes security over
-convenience by enforcing modal, blocking dialogs for unknown or changed host keys.
-The decision to treat "Accept" and "Always Trust" identically simplifies the
-implementation for a single-user local tool without compromising the security model.
-The primary technical challenge lies in the orchestration between the background SSH
-thread (`FetchWorker`), the `connector.py` abstraction, and the main GUI thread,
-while respecting the strict separation of concerns between the database and the
-connection logic.
+The proposed plans are exceptionally well-structured, demonstrating high engineering rigor and a deep understanding of the SSH TOFU (Trust On First Use) security model. The architectural separation is preserved via dependency injection (`verifier_fn`), and the transition from a worker thread to a modal GUI dialog is handled using the correct synchronization primitives (`threading.Event`). The inclusion of a mandatory security audit and keyword-only parameter enforcement across all layers is a standout feature that aligns perfectly with the project's "safe, offline tool" value proposition.
 
 ### Strengths
 
-- Security posture is correct: modal blocking dialogs, explicit user decision
-  required, no silent acceptance of unknown or changed keys
-- D-04 (X button = Reject) is an excellent safe-default decision
-- D-01 (Accept = Always Trust) is the right simplification for a single-user local tool
-- SHA256:Base64 fingerprint format matches what network engineers already know from OpenSSH/PuTTY
-- Re-using `make_table()` for SSH-04 correctly avoids reinventing styled table widgets
+- **Engineering Rigor**: The mandatory security audit of `connector.py` (searching for `verify=False` or `AutoAddPolicy`) is an excellent proactive measure to ensure the implementation does not mask legacy issues.
+- **Architectural Integrity**: `connector.py` remains "pure" (no PyQt6 or DB imports) by receiving a callable. This ensures the SSH logic is testable in isolation and maintains a clean boundary between the protocol and the application.
+- **Robust Threading Pattern**: The use of `threading.Event` for blocking the worker thread while a `QueuedConnection` signal triggers the GUI is the idiomatic way to handle this in PyQt6, avoiding the common pitfalls of complex shared state.
+- **Security-First UX**: Treating the dialog "X" button as a `Reject` (Safe Default) and providing side-by-side fingerprints in the "Changed Key" dialog are superior design choices that follow security best practices.
+- **Defensive Programming**: Making security-critical parameters keyword-only (`*`) at the function signature level is a strong "defense in depth" strategy to prevent positional argument errors.
 
 ### Concerns
 
-- **Thread Deadlock Risk (HIGH):** The Paramiko `MissingHostKeyPolicy` will be
-  triggered inside the `FetchWorker` thread. Since this thread needs to wait for a
-  user response from the main GUI thread, a simple signal/slot mechanism won't
-  suffice because the SSH connection is synchronous and blocking. If not handled
-  with precision, this will freeze the worker or the entire UI.
-
-- **Architectural Coupling (MEDIUM):** The "no DB in connector" and "no GUI in
-  connector" rules create a "three-body problem." `connector.py` needs host keys
-  to verify them, but it can't fetch them directly. A clean dependency injection
-  pattern (e.g., passing a verifier interface/callable) is required to avoid
-  breaking these architectural boundaries.
-
-- **Netmiko Abstraction Limits (MEDIUM):** Netmiko wraps Paramiko's connection
-  logic. Injecting a custom `MissingHostKeyPolicy` usually requires reaching into
-  Netmiko's internal `paramiko_kwargs`. The plan must verify this injection
-  works *before* the socket is opened — not all Netmiko versions expose this
-  cleanly.
-
-- **Duplicate Key Records (LOW):** Devices reachable via multiple IPs/hostnames
-  will result in multiple prompts and DB entries. While cryptographically correct,
-  this may be confusing in a device-centric UI if the user expects one key per
-  Device object.
+- **HIGH: Race Condition in `HostKeyVerifier`** — `self._pending` is an instance variable. If a user triggers Fetch on two panels nearly simultaneously, their calls to `verify_host_key` will collide. The second call overwrites `self._pending`, potentially causing one thread to receive the result of the other's dialog or causing the app to hang.
+- **MEDIUM: DB CASCADE dependency** — The plan correctly identifies that `PRAGMA foreign_keys` is not enabled and fixes `delete_device` manually. However, future developers adding new tables might forget the manual cascade. Enabling `PRAGMA foreign_keys = ON` in `get_conn()` globally would be safer.
+- **LOW: Paramiko Version Assumption** — The plan relies on `key.fingerprint` returning `SHA256:Base64` directly. This property was introduced in Paramiko 3.x. A version check or fallback would guarantee compatibility.
 
 ### Suggestions
 
-- **Synchronization Strategy:** Use `QtCore.QMetaObject.invokeMethod` with
-  `Qt.ConnectionType.BlockingQueuedConnection` to call the dialog from the
-  background thread. This allows the background thread to safely block waiting
-  for the user's Accept/Reject response before continuing the SSH handshake.
-
-- **Host Key Verifier Interface:** Define a `HostKeyVerifier` callable or
-  interface. The `FetchWorker` provides the implementation (handles `db.py` lookup
-  + UI signaling). `connector.py` receives it as an argument and calls it — never
-  imports `db.py` or PyQt6 directly. This resolves the three-body problem cleanly.
-
-- **Schema Unique Constraint:** Add a `UNIQUE(device_id, hostname, port, key_type)`
-  constraint to the `host_keys` table. This makes the "Update Key"
-  (DELETE + INSERT) logic atomic and prevents logical duplicates.
-
-- **Store Raw Key Blob:** Store the actual public key `key_blob` in the database
-  (already in the proposed schema). Ensure Paramiko verification uses the raw
-  blob for cryptographic comparison, not just the fingerprint string.
-
-- **Status Bar Specificity:** When connection is rejected via dialog, bubble up
-  the specific reason ("User rejected host key" vs "Host key mismatch") so the
-  status bar notice at D-07 is accurate and actionable.
+- **Fix Concurrency**: Modify `HostKeyVerifier.verify_host_key` to avoid instance-level storage. Instead of `self._pending`, use a `dict` keyed by `threading.get_ident()` to isolate state per-thread.
+- **Global DB Pragma**: Add `conn.execute("PRAGMA foreign_keys = ON")` to the `get_conn()` helper in `db.py`.
+- **Dialog Parenting**: Ensure dialogs receive the `MainWindow` as a parent for correct modal centering.
+- **Status Bar Persistence**: The D-07 "Connected (host key mismatch not resolved)" message may be immediately overwritten by the panel's own success message — consider ordering or color differentiation.
 
 ### Risk Assessment
 
-**Risk Level: MEDIUM**
+**Level: MEDIUM**
 
-The security logic is robust, but the **cross-thread blocking dialog** pattern is
-a classic source of UI freezes or deadlocks in PyQt6. The success of this phase
-depends on a disciplined synchronization pattern between `FetchWorker` and the GUI
-thread. Additionally, the strict separation of `connector.py` from `db.py` requires
-a clean dependency injection strategy to maintain architectural integrity.
+The plans are 95% correct from a security and logic perspective. The **concurrency race condition** in `HostKeyVerifier` is the primary technical risk. Once state-passing is made thread-safe, the risk level drops to **LOW**.
 
 ---
 
-## Consensus Summary (Phase 3 Retrospective + Gemini Design Review)
+## Codex Review
+
+### Summary
+
+Overall, the phase design is directionally strong: it separates DB persistence, SSH policy injection, GUI prompting, panel wiring, and final verification into sensible waves. The plans cover the four SSH requirements and include useful adversarial tests. The largest risks are not missing features, but contract mismatches between plans, unsafe fallback paths, and cross-thread state handling. As written, the plans are close, but I would not approve implementation without tightening the verifier/device identity contract, the `verifier_fn=None` fallback, SQLite referential integrity assumptions, and concurrency behavior.
+
+### Strengths
+
+- Clear phase boundaries: Phase 4 stays focused on host key verification and does not reopen credential encryption.
+- Good architecture intent: `connector.py` receives an injected verifier callback instead of importing GUI code.
+- Correct host key comparison strategy: storing and comparing the full public key blob is better than comparing only displayed fingerprints.
+- Good security UX coverage: first-connect, reject, silent reconnect, changed-key warning, connect-anyway, and update-key paths are all specified.
+- `system_host_keys=False` is correctly called out as mandatory; otherwise OS `known_hosts` could bypass RemoteIn's trust database.
+- Dialog close behavior defaults to reject — the right safe default.
+- Changed-key dialog requirements are strong: both old and new fingerprints, MITM warning, and explicit update-vs-connect-anyway choices.
+
+### Concerns
+
+- **HIGH: `device_id` contract is inconsistent across 04-02, 04-03, and 04-04** — `HostKeyVerifier.verify_host_key` requires `device_id`, but `RemoteInHostKeyPolicy.missing_host_key` only passes `hostname`, `port`, `key_type`, `fingerprint`, and `key_blob`. 04-04 passes `self._verifier.verify_host_key` directly with no wrapper adding `device_id`. This is a blocking integration gap — the verifier cannot look up or store the key without knowing which device it belongs to.
+
+- **HIGH: `verifier_fn=None` fallback silently bypasses the new security model** — 04-02 and 04-04 describe this as "safe degradation," but for a security phase it is not safe. If wiring is missed anywhere, SSH connects without RemoteIn host key verification. After Phase 4, production Netmiko calls should fail closed if no verifier is supplied.
+
+- **HIGH: SQLite foreign key assumptions are wrong unless `PRAGMA foreign_keys=ON` is enabled** — 04-01 says `store_host_key` may raise `sqlite3.IntegrityError` for a nonexistent `device_id`, but the plan also states foreign keys are not enabled. In that state, SQLite will allow orphaned `host_keys` rows.
+
+- **HIGH: Single `_pending` field is not safe for concurrent fetches** — The plan assumes one pending check at a time, but the app has multiple panels. A second host-key prompt can overwrite `_pending`, causing wrong decisions, stuck workers, or DB writes for the wrong connection.
+
+- **HIGH: Timeout handling can race with the dialog** — If the worker times out after 30 seconds and clears `_pending` while the modal dialog is still open, a later user click may write into `None` or stale state. The slot should capture a per-request object/token instead of reading mutable shared `_pending`.
+
+- **HIGH: Plan 04-02's "connector imports no db" checklist may conflict with credential decryption** — If `connector.py` already imports `decrypt_field` from `db.py` for Phase 3 credential decryption, the checklist goal is either impossible or requires a `crypto.py` extraction. The plan should resolve this explicitly.
+
+- **MEDIUM: D-07 status message may fire before connection succeeds** — 04-04 emits the note from `verify_host_key` after "Connect Anyway." At that moment, authentication or command execution can still fail. The message could incorrectly say "Connected."
+
+- **MEDIUM: `INSERT OR REPLACE` changes primary key and `added_at`** — SQLite REPLACE deletes and reinserts, changing the row's PK. `ON CONFLICT ... DO UPDATE SET` is cleaner and preserves row identity.
+
+- **MEDIUM: `Accept Once` semantics are intentionally misleading** — D-01 says Accept Once and Always Trust both store the key. Most users expect "Accept Once" to be session-only. UI text should clarify that both choices persist.
+
+- **MEDIUM: Genie bypass remains a security gap** — Genie path does not get host key verification. The code should gate this explicitly by platform or disable Genie when verification is required.
+
+- **MEDIUM: Paramiko fingerprint property version should be pinned** — Requirements should pin compatible Paramiko/Netmiko versions or add a compatibility helper.
+
+- **LOW: Standalone assert scripts may conflict with pytest if it exists** — If `tests/conftest.py` or pytest tests already exist, adding standalone scripts fragments testing.
+
+- **LOW: `closeEvent(None)` in dialog tests is fragile** — `closeEvent` expects a close event object. Prefer `dialog.close()` or constructing a real `QCloseEvent`.
+
+- **LOW: DB error handling is uneven** — Explicit `QMessageBox.warning` around key operations would be more user-friendly.
+
+### Suggestions
+
+- **Fix the verifier contract before implementation** — Create a per-device wrapper in `BasePanel.set_device` or `main.py`:
+
+  ```python
+  verifier_fn = lambda **kwargs: self._verifier.verify_host_key(device_id=device["id"], **kwargs)
+  ```
+
+  This keeps `verify_host_key` keyword-only and injects `device_id` at the call site without modifying the Paramiko hook signature.
+
+- **Make missing verifier fail closed** — A missing verifier should raise `RuntimeError`, not silently connect without verification. Use an explicit test fixture for tests that bypass it.
+
+- **Enable SQLite foreign keys in `get_conn()`**:
+
+  ```python
+  conn.execute("PRAGMA foreign_keys = ON")
+  ```
+
+- **Replace `_pending` with request-scoped state** — Use a per-thread dict keyed by `threading.get_ident()`, or a `PendingHostKeyCheck` dataclass passed through the signal.
+
+- **Add a `threading.Lock`** to protect verifier state if multiple workers can call it.
+
+- **Move D-07 status message** to after `conn._open()` succeeds in `_connect_with_policy`, not when the user dismisses the dialog.
+
+- **Prefer SQLite upsert** over `INSERT OR REPLACE`:
+
+  ```sql
+  INSERT INTO host_keys (...) VALUES (...)
+  ON CONFLICT(device_id, hostname, port, key_type)
+  DO UPDATE SET fingerprint = excluded.fingerprint,
+                key_blob = excluded.key_blob,
+                added_at = CURRENT_TIMESTAMP
+  ```
+
+- **Add explicit tests** for: missing verifier fails closed; nonexistent `device_id` cannot create orphan keys; two simultaneous prompts do not cross-write; timeout + late dialog click does not crash; "Connect Anyway" does not update DB and does not emit "Connected" if connection later fails.
+
+### Risk Assessment
+
+**Overall risk: MEDIUM-HIGH**
+
+Feature design is mostly complete and security-aware, but several integration contracts are currently inconsistent. The biggest risks are silent bypass if `verifier_fn` is missing, missing `device_id` propagation through the Paramiko hook, SQLite orphan rows due to disabled foreign keys, and race conditions in the cross-thread verifier. These can be fixed without redesign, but must be resolved before implementation begins.
+
+---
+
+## Consensus Summary
+
+Both reviewers independently identified the same critical risks. This cross-AI agreement gives high confidence these are real issues.
 
 ### Agreed Strengths
-- Security-first defaults throughout: reject on ambiguity, no silent acceptance
-- Reuse of established patterns (`make_table`, `QTabWidget`, keyword-only args)
-- Dialog UX matches network engineer expectations (OpenSSH/PuTTY fingerprint format)
 
-### Agreed Top Concerns
+- **Correct cross-thread mechanism**: `threading.Event` + `QueuedConnection` signal is the right PyQt6 pattern for blocking a worker while showing a GUI dialog
+- **Architectural integrity**: `connector.py` receiving a `verifier_fn` callable (not importing PyQt6 or db) is correct layering
+- **Security-first defaults**: X button = Reject, SHA256 fingerprints, full key blob storage for cryptographic comparison
+- **Keyword-only argument enforcement**: Applying the Phase 3 lesson consistently across all new security-sensitive functions
+- **Changed-key dialog design**: Both fingerprints displayed, MITM warning text, three explicit choices
 
-1. **Cross-thread dialog synchronization (HIGH)** — Both reviews flag this as the
-   highest-risk implementation problem. The plan must specify the exact Qt
-   mechanism (`BlockingQueuedConnection` or `threading.Event`) before any code
-   is written.
+### Agreed Concerns
 
-2. **Dependency injection for connector.py (MEDIUM)** — `connector.py` cannot
-   import `db.py` or PyQt6. The plan must name the injection boundary explicitly
-   (a callable/verifier passed as a parameter).
+| Concern | Severity | Both Reviewers |
+|---------|----------|----------------|
+| `_pending` race condition — concurrent panel fetches can collide | **HIGH** | yes |
+| SQLite foreign keys disabled — orphaned rows and inaccurate error contracts | **HIGH/MEDIUM** | yes |
+| Paramiko `key.fingerprint` property version dependency | **LOW/MEDIUM** | yes |
 
-3. **Netmiko `paramiko_kwargs` injection (MEDIUM)** — Verify the exact Netmiko
-   API for injecting a custom `MissingHostKeyPolicy` before finalizing the plan.
-   Document the Netmiko version constraint.
+### Codex-Only HIGH Concerns
 
-4. **Every failure path needs a specified UI response (Phase 3 lesson)** —
-   "Non-fatal" is not a specification. Each catch block must name what the user
-   sees.
+| Concern | Severity |
+|---------|----------|
+| `device_id` not propagated from `RemoteInHostKeyPolicy` hook to `verify_host_key` — blocking integration gap | **HIGH** |
+| `verifier_fn=None` fails open — silently bypasses security model | **HIGH** |
+| Timeout race: worker clears `_pending` while dialog is still open | **HIGH** |
+| `connector.py` "no db import" rule may conflict with Phase 3 credential decryption | **HIGH** |
+| D-07 status message fires before connection actually succeeds | **MEDIUM** |
 
-### Binding Items for Every Phase 4 Plan
-1. Keyword-only args for all security params — no defaults on `key_blob`, `fingerprint`, etc.
-2. Cross-thread dialog mechanism named explicitly in the plan (not deferred to implementer)
-3. `host_keys` UNIQUE constraint on `(device_id, hostname, port, key_type)`
-4. Adversarial tests: reject path, tampered row, dialog cancelled
-5. connector.py security audit sub-task in any plan that touches `connector.py`
-6. Verification checkpoint includes security posture check (key not stored after Reject)
+### Priority Fixes Before Merging
+
+1. **Fix `device_id` propagation** — Wrap `verify_host_key` at the call site to close-bind `device_id` from the current device:
+   ```python
+   verifier_fn = lambda **kwargs: self._verifier.verify_host_key(device_id=device["id"], **kwargs)
+   ```
+
+2. **Fix `_pending` race condition** — Replace the single instance variable with a per-thread dict keyed by `threading.get_ident()`.
+
+3. **Enable `PRAGMA foreign_keys = ON`** in `get_conn()` — gives referential integrity globally and makes the `store_host_key` error contract accurate.
+
+4. **Make `verifier_fn=None` fail closed** — A missing verifier should raise `RuntimeError`, not silently connect without verification.
+
+5. **Resolve `connector.py` import rule** — Verify whether `connector.py` imports anything from `db.py` for Phase 3 credential decryption. If so, update the audit checklist or extract a `crypto.py` module.
+
+---
+
+*To incorporate this feedback into planning: `/gsd-plan-phase 4 --reviews`*
