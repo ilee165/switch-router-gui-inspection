@@ -207,6 +207,10 @@ class DeviceManagerDialog(QDialog):
     def _refresh_list(self):
         self.list_widget.clear()
         self._devices = db.list_devices()
+        self._current_device_id = None
+        self._ssh_table.setRowCount(0)
+        self._ssh_empty_label.setVisible(False)
+        self._ssh_table.setVisible(True)
         for d in self._devices:
             item = QListWidgetItem(f"  {d['name']}  [{d['hostname']}]  {d['platform'].upper()}")
             item.setData(Qt.ItemDataRole.UserRole, d["id"])
@@ -214,9 +218,78 @@ class DeviceManagerDialog(QDialog):
 
     def _on_item_clicked(self, item):
         dev_id = item.data(Qt.ItemDataRole.UserRole)
+        self._current_device_id = dev_id
         device = db.get_device(dev_id)
         if device:
             self.form.load_device(device, session_key=self._session_key)
+            self._load_ssh_keys(dev_id)
+
+    def _load_ssh_keys(self, device_id: int):
+        """Populate the SSH Keys tab with stored host keys for the given device.
+
+        Clears the table, fetches rows from the DB, then either shows the
+        table rows or the empty-state label. The key ID is stored in column 0
+        via UserRole so the Delete action can retrieve it without a second query.
+
+        Error contract: if db.get_device_host_keys raises, show a warning dialog
+        and display the empty-state label. Do not crash the dialog.
+        """
+        self._ssh_table.setRowCount(0)
+        try:
+            keys = db.get_device_host_keys(device_id=device_id)
+        except Exception as e:
+            QMessageBox.warning(self, "SSH Keys Error", f"Could not load host keys:\n{e}")
+            self._ssh_empty_label.setVisible(True)
+            self._ssh_table.setVisible(False)
+            return
+        if not keys:
+            self._ssh_empty_label.setVisible(True)
+            self._ssh_table.setVisible(False)
+            return
+        self._ssh_empty_label.setVisible(False)
+        self._ssh_table.setVisible(True)
+        self._ssh_table.setRowCount(len(keys))
+        for row_idx, key_row in enumerate(keys):
+            set_cell(self._ssh_table, row_idx, 0, key_row["key_type"])
+            set_cell(self._ssh_table, row_idx, 1, key_row["fingerprint"])
+            set_cell(self._ssh_table, row_idx, 2, key_row["added_at"])
+            # Store the key primary-key ID in column 0's item via UserRole.
+            # This lets _delete_host_key retrieve the correct row ID without
+            # needing a second DB query or a separate data structure.
+            item = self._ssh_table.item(row_idx, 0)
+            item.setData(Qt.ItemDataRole.UserRole, key_row["id"])
+
+    def _delete_host_key(self):
+        """Delete the selected host key row after a confirmation dialog.
+
+        Retrieves the key ID from column 0's UserRole data (set by _load_ssh_keys),
+        shows a confirmation dialog with the fingerprint, then calls
+        db.delete_host_key(key_id=...) and refreshes the table.
+        """
+        selected_rows = self._ssh_table.selectedItems()
+        if not selected_rows:
+            QMessageBox.information(self, "No Selection", "Select a key row to delete.")
+            return
+        row = self._ssh_table.currentRow()
+        key_id_item = self._ssh_table.item(row, 0)
+        if key_id_item is None:
+            return
+        key_id = key_id_item.data(Qt.ItemDataRole.UserRole)
+        fp_item = self._ssh_table.item(row, 1)
+        fingerprint = fp_item.text() if fp_item else "?"
+        reply = QMessageBox.question(
+            self, "Confirm Delete",
+            f"Delete stored host key?\nFingerprint: {fingerprint}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                db.delete_host_key(key_id=key_id)
+            except Exception as e:
+                QMessageBox.warning(self, "Delete Error", str(e))
+                return
+            if self._current_device_id is not None:
+                self._load_ssh_keys(self._current_device_id)
 
     def _save_device(self, payload: dict):
         if payload["id"] is None:
