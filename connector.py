@@ -77,8 +77,13 @@ PLATFORM_MAP = {
 NO_ENABLE_PLATFORMS = {"eos", "junos"}
 
 
-def _netmiko_device(device: dict, session_key: bytes) -> dict:
-    """Build Netmiko connection dict from device record, decrypting credentials."""
+def _netmiko_device(device: dict, session_key: bytes, verifier_fn=None) -> dict:
+    """Build Netmiko connection dict from device record, decrypting credentials.
+
+    verifier_fn: optional callable passed to RemoteInHostKeyPolicy. When None,
+    _connect_with_policy() falls back to a standard ConnectHandler (no custom
+    policy). For production use, always supply a verifier_fn.
+    """
     _pw = decrypt_field(session_key, device["password"])
     _ep = decrypt_field(session_key, device.get("enable_pass", ""))
     if _pw is None:
@@ -91,11 +96,10 @@ def _netmiko_device(device: dict, session_key: bytes) -> dict:
         "password":         _pw,
         "secret":           _ep or "",
         "timeout":          15,
-        # SSH-01 (host-key fingerprint dialog) is not yet implemented.
-        # Interim safe default: load system known_hosts so only already-trusted
-        # hosts connect. Do NOT set ssh_strict=False — that disables MITM protection.
-        # Remove this comment and add proper host-key verification when SSH-01 ships.
-        "system_host_keys": True,
+        # system_host_keys=False: RemoteIn manages host keys via its own DB table.
+        # Setting True would cause Paramiko to silently accept any host already in
+        # ~/.ssh/known_hosts, bypassing RemoteInHostKeyPolicy entirely — a MITM risk.
+        "system_host_keys": False,
         "use_keys":         False,  # don't use SSH key files
         "key_file":         None,   # no key file
     }
@@ -167,84 +171,124 @@ def _genie_fetch(device: dict, cmd: str, session_key: bytes) -> dict | None:
                 pass
 
 
+def _connect_with_policy(netmiko_kwargs: dict, verifier_fn) -> ConnectHandler:
+    """Open a Netmiko connection, injecting RemoteInHostKeyPolicy when a verifier is provided.
+
+    When verifier_fn is None: falls back to standard ConnectHandler (no custom policy).
+    This can occur during partial wiring or in test contexts. Production code should
+    always supply a verifier_fn.
+
+    When verifier_fn is provided:
+      1. Instantiate RemoteInHostKeyPolicy with the verifier and the connection port.
+      2. Build ConnectHandler with auto_connect=False (socket not yet opened).
+      3. Assign conn.key_policy before the connection opens.
+      4. Call conn._open() — triggers the Paramiko SSH handshake, which invokes
+         missing_host_key if the host key is not already trusted.
+
+    If missing_host_key raises paramiko.SSHException (user rejected), it propagates
+    out of _open(), out of _connect_with_policy(), and is caught by FetchWorker.run()
+    which emits it as error(str(exc)) to the status bar.
+    """
+    if verifier_fn is None:
+        return ConnectHandler(**netmiko_kwargs)
+
+    port = netmiko_kwargs.get("port", 22)
+    policy = RemoteInHostKeyPolicy(verifier_fn, port=port)
+    conn = ConnectHandler(**netmiko_kwargs, auto_connect=False)
+    conn.key_policy = policy
+    conn._open()
+    return conn
+
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 
-def get_interfaces(device: dict, session_key: bytes) -> dict:
-    """Return structured interface data via Genie, TextFSM, or raw CLI."""
+def get_interfaces(device: dict, session_key: bytes, verifier_fn=None) -> dict:
+    """Return structured interface data via Genie, TextFSM, or raw CLI.
+
+    Note: the Genie path (Linux/Mac only) uses pyATS's own SSH stack and does not
+    support RemoteInHostKeyPolicy. Host key verification applies to the Netmiko path only.
+    """
     if GENIE_AVAILABLE:
         result = _genie_fetch(device, "show interfaces", session_key)
         if result is not None:
             return {"source": "genie", "data": result}
-    with ConnectHandler(**_netmiko_device(device, session_key)) as conn:
+    kwargs = _netmiko_device(device, session_key)
+    with _connect_with_policy(kwargs, verifier_fn) as conn:
         if device["platform"] not in NO_ENABLE_PLATFORMS:
             conn.enable()
         source, data = _send(conn, "show interfaces")
     return {"source": source, "data": data}
 
 
-def get_routing_table(device: dict, session_key: bytes) -> dict:
+def get_routing_table(device: dict, session_key: bytes, verifier_fn=None) -> dict:
     if GENIE_AVAILABLE:
         result = _genie_fetch(device, "show ip route", session_key)
         if result is not None:
             return {"source": "genie", "data": result}
-    with ConnectHandler(**_netmiko_device(device, session_key)) as conn:
+    kwargs = _netmiko_device(device, session_key)
+    with _connect_with_policy(kwargs, verifier_fn) as conn:
         if device["platform"] not in NO_ENABLE_PLATFORMS:
             conn.enable()
         source, data = _send(conn, "show ip route")
     return {"source": source, "data": data}
 
 
-def get_bgp_neighbors(device: dict, session_key: bytes) -> dict:
+def get_bgp_neighbors(device: dict, session_key: bytes, verifier_fn=None) -> dict:
     if GENIE_AVAILABLE:
         result = _genie_fetch(device, "show bgp all neighbors", session_key)
         if result is not None:
             return {"source": "genie", "data": result}
-    with ConnectHandler(**_netmiko_device(device, session_key)) as conn:
+    kwargs = _netmiko_device(device, session_key)
+    with _connect_with_policy(kwargs, verifier_fn) as conn:
         if device["platform"] not in NO_ENABLE_PLATFORMS:
             conn.enable()
         source, data = _send(conn, "show ip bgp neighbors")
     return {"source": source, "data": data}
 
 
-def get_ospf_neighbors(device: dict, session_key: bytes) -> dict:
+def get_ospf_neighbors(device: dict, session_key: bytes, verifier_fn=None) -> dict:
     if GENIE_AVAILABLE:
         result = _genie_fetch(device, "show ip ospf neighbor", session_key)
         if result is not None:
             return {"source": "genie", "data": result}
-    with ConnectHandler(**_netmiko_device(device, session_key)) as conn:
+    kwargs = _netmiko_device(device, session_key)
+    with _connect_with_policy(kwargs, verifier_fn) as conn:
         if device["platform"] not in NO_ENABLE_PLATFORMS:
             conn.enable()
         source, data = _send(conn, "show ip ospf neighbor")
     return {"source": source, "data": data}
 
 
-def get_arp_table(device: dict, session_key: bytes) -> dict:
+def get_arp_table(device: dict, session_key: bytes, verifier_fn=None) -> dict:
     if GENIE_AVAILABLE:
         result = _genie_fetch(device, "show ip arp", session_key)
         if result is not None:
             return {"source": "genie", "data": result}
-    with ConnectHandler(**_netmiko_device(device, session_key)) as conn:
+    kwargs = _netmiko_device(device, session_key)
+    with _connect_with_policy(kwargs, verifier_fn) as conn:
         if device["platform"] not in NO_ENABLE_PLATFORMS:
             conn.enable()
         source, data = _send(conn, "show ip arp")
     return {"source": source, "data": data}
 
 
-def get_mac_table(device: dict, session_key: bytes) -> dict:
+def get_mac_table(device: dict, session_key: bytes, verifier_fn=None) -> dict:
     if GENIE_AVAILABLE:
         result = _genie_fetch(device, "show mac address-table", session_key)
         if result is not None:
             return {"source": "genie", "data": result}
-    with ConnectHandler(**_netmiko_device(device, session_key)) as conn:
+    kwargs = _netmiko_device(device, session_key)
+    with _connect_with_policy(kwargs, verifier_fn) as conn:
         if device["platform"] not in NO_ENABLE_PLATFORMS:
             conn.enable()
         source, data = _send(conn, "show mac address-table")
     return {"source": source, "data": data}
 
 
-def run_cli_command(device: dict, command: str, session_key: bytes) -> str:
+def run_cli_command(device: dict, command: str, session_key: bytes, verifier_fn=None) -> str:
     """Run an arbitrary CLI command and return raw output."""
-    with ConnectHandler(**_netmiko_device(device, session_key)) as conn:
+    kwargs = _netmiko_device(device, session_key)
+    with _connect_with_policy(kwargs, verifier_fn) as conn:
         if device["platform"] not in NO_ENABLE_PLATFORMS:
             conn.enable()
         output = conn.send_command(command, read_timeout=30)
