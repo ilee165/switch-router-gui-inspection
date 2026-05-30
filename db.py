@@ -343,4 +343,130 @@ def delete_device(device_id: int):
         # atomically: if either fails the whole transaction rolls back.
         conn.execute("DELETE FROM host_keys WHERE device_id = ?", (device_id,))
         conn.execute("DELETE FROM devices WHERE id = ?", (device_id,))
+
+
+# ── Host key functions ────────────────────────────────────────────────────────
+
+
+def store_host_key(*, device_id: int, hostname: str, port: int,
+                   key_type: str, fingerprint: str, key_blob: str) -> None:
+    """Insert or replace a host key row for the given (device, host, port, key_type) tuple.
+
+    Uses INSERT OR REPLACE so that calling this function twice with the same
+    tuple (e.g. "Always Trust" on first connect, or "Update Key" after a change)
+    replaces the existing row atomically — no separate upsert logic needed.
+
+    All parameters are keyword-only (the * separator) so security-relevant
+    identifiers can never be passed positionally and swapped silently.
+
+    Args:
+        device_id:   Foreign key into devices.id.
+        hostname:    The hostname or IP address the SSH connection used.
+        port:        The SSH port number (typically 22).
+        key_type:    SSH key algorithm string (e.g. "ssh-ed25519", "ssh-rsa").
+        fingerprint: SHA256 fingerprint string as displayed to the user.
+        key_blob:    Base64-encoded server public key blob (opaque to this layer).
+
+    Raises:
+        sqlite3.IntegrityError: If device_id references a non-existent device.
+            Caller (host_key_dialog.py) must catch and show QMessageBox.warning.
+    """
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT OR REPLACE INTO host_keys
+               (device_id, hostname, port, key_type, fingerprint, key_blob)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (device_id, hostname, port, key_type, fingerprint, key_blob),
+        )
+
+
+def get_host_key(*, device_id: int, hostname: str, port: int,
+                 key_type: str) -> dict | None:
+    """Fetch a single host key row by its UNIQUE tuple.
+
+    Returns the row as a dict, or None if no matching row exists. The None
+    return is the "Reject" code path signal — no exception is raised for a
+    missing row because absence is a valid and expected state (first connect).
+
+    Args:
+        device_id: Foreign key into devices.id.
+        hostname:  The hostname or IP address the SSH connection used.
+        port:      The SSH port number.
+        key_type:  SSH key algorithm string.
+
+    Returns:
+        dict with all host_keys columns, or None if not found.
+    """
+    with get_conn() as conn:
+        row = conn.execute(
+            """SELECT * FROM host_keys
+               WHERE device_id = ? AND hostname = ? AND port = ? AND key_type = ?""",
+            (device_id, hostname, port, key_type),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def update_host_key(*, device_id: int, hostname: str, port: int,
+                    key_type: str, fingerprint: str, key_blob: str) -> None:
+    """Replace fingerprint and key_blob for an existing host key row.
+
+    This is the "Update Key" action from the changed-key warning dialog (D-05).
+    The added_at column is reset to CURRENT_TIMESTAMP to record when the key
+    was last verified — useful for audit and for detecting stale trust entries.
+
+    If no matching row exists (0 rows updated) this is a no-op. Callers that
+    are unsure whether the row exists should use store_host_key instead.
+
+    Args:
+        device_id:   Foreign key into devices.id.
+        hostname:    The hostname or IP address the SSH connection used.
+        port:        The SSH port number.
+        key_type:    SSH key algorithm string.
+        fingerprint: New SHA256 fingerprint string.
+        key_blob:    New base64-encoded server public key blob.
+    """
+    with get_conn() as conn:
+        conn.execute(
+            """UPDATE host_keys
+               SET fingerprint = ?, key_blob = ?, added_at = CURRENT_TIMESTAMP
+               WHERE device_id = ? AND hostname = ? AND port = ? AND key_type = ?""",
+            (fingerprint, key_blob, device_id, hostname, port, key_type),
+        )
+
+
+def delete_host_key(*, key_id: int) -> None:
+    """Remove a single host key row by its primary key.
+
+    Used by the SSH tab Delete button (SSH-04). If the row does not exist,
+    this is a no-op — no exception is raised for a missing row.
+
+    The parameter is named key_id (not id) to avoid shadowing the Python
+    built-in id() function. It is keyword-only to make call sites explicit.
+
+    Args:
+        key_id: The integer primary key of the host_keys row to delete.
+    """
+    with get_conn() as conn:
+        conn.execute("DELETE FROM host_keys WHERE id = ?", (key_id,))
+
+
+def get_device_host_keys(*, device_id: int) -> list[dict]:
+    """Return all host key rows for a device, newest first.
+
+    Used to populate the SSH tab table (SSH-04). Returns an empty list if
+    no keys have been stored for this device — not an error condition.
+
+    Args:
+        device_id: Foreign key into devices.id.
+
+    Returns:
+        List of dicts (all host_keys columns), ordered by added_at DESC.
+        Empty list if no rows exist.
+    """
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM host_keys WHERE device_id = ? ORDER BY added_at DESC",
+            (device_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
  
