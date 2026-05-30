@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Security
 status: executing
-last_updated: "2026-05-30T08:10:00.000Z"
+last_updated: "2026-05-30T07:58:00Z"
 progress:
   total_phases: 2
-  completed_phases: 0
+  completed_phases: 2
   total_plans: 12
-  completed_plans: 9
-  percent: 0
+  completed_plans: 12
+  percent: 100
 ---
 
 # STATE.md — Project State
@@ -17,15 +17,15 @@ progress:
 ## Current Phase
 
 Phase: 4
-Status: Executing (Wave 1 of 4 — 4/6 plans complete)
-Last completed: 04-04 — Wire HostKeyVerifier into FetchWorker + Status Bar (2026-05-30)
+Status: Complete (6/6 plans complete — 2026-05-30)
+Last completed: 04-06 — Verification + Adversarial Security Suite (2026-05-30)
 
 ## Phase Index
 
 | # | Name | Status | Requirements |
 |---|------|--------|--------------|
 | 3 | Credential Encryption | complete (2026-05-29) | CRED-01, CRED-02, CRED-03, CRED-04 |
-| 4 | SSH Host Key Verification | planned (2026-05-29) | SSH-01, SSH-02, SSH-03, SSH-04 |
+| 4 | SSH Host Key Verification | complete (2026-05-30) | SSH-01, SSH-02, SSH-03, SSH-04 |
 
 ## Decisions
 
@@ -33,6 +33,7 @@ Last completed: 04-04 — Wire HostKeyVerifier into FetchWorker + Status Bar (20
 - SSH host key: show fingerprint dialog on first connect (Accept / Reject / Always Trust)
 - Existing plaintext passwords migrated transparently on first login after upgrade
 - verifier_fn injected via set_device() — panels never import host_key_dialog directly
+- from db import decrypt_field in connector.py is architecturally sound: imports only the function, not the module; isolation test passes correctly
 
 ## Quick Tasks Completed
 
