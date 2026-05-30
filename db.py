@@ -36,6 +36,18 @@ def init_db ():
                 enable_pass TEXT DEFAULT '',
                 notes       TEXT DEFAULT ''
             );
+
+            CREATE TABLE IF NOT EXISTS host_keys (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id   INTEGER NOT NULL REFERENCES devices(id),
+                hostname    TEXT    NOT NULL,
+                port        INTEGER NOT NULL,
+                key_type    TEXT    NOT NULL,
+                fingerprint TEXT    NOT NULL,
+                key_blob    TEXT    NOT NULL,
+                added_at    TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(device_id, hostname, port, key_type)
+            );
         """)
 
         # Add encryption_salt column if this is an upgrade from a pre-encryption install.
@@ -324,5 +336,11 @@ def update_device(device_id, name, hostname, ip_address, platform, port, usernam
  
 def delete_device(device_id: int):
     with get_conn() as conn:
+        # Explicitly delete associated host keys before the device row.
+        # PRAGMA foreign_keys is NOT enabled in get_conn(), so the REFERENCES
+        # declaration does not cascade automatically — we must do it here.
+        # Both DELETEs run inside the same connection context manager and commit
+        # atomically: if either fails the whole transaction rolls back.
+        conn.execute("DELETE FROM host_keys WHERE device_id = ?", (device_id,))
         conn.execute("DELETE FROM devices WHERE id = ?", (device_id,))
  
