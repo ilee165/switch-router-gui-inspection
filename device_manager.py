@@ -2,11 +2,12 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QComboBox, QSpinBox, QLabel, QPushButton,
     QListWidget, QListWidgetItem, QMessageBox, QGroupBox,
-    QWidget, QSplitter, QTextEdit
+    QWidget, QSplitter, QTextEdit, QTabWidget
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 import db
 from db import decrypt_field
+from panels.base import make_table, set_cell, PALETTE
 
 
 PLATFORMS = ["ios", "iosxe", "iosxr", "nxos", "eos", "junos"]
@@ -129,6 +130,7 @@ class DeviceManagerDialog(QDialog):
     def __init__(self, parent=None, *, session_key: bytes):
         super().__init__(parent)
         self._session_key = session_key
+        self._current_device_id = None
         self.setWindowTitle("Device Manager")
         self.setMinimumSize(800, 500)
         self._build_ui()
@@ -152,16 +154,47 @@ class DeviceManagerDialog(QDialog):
         del_btn.clicked.connect(self._delete_device)
         lv.addWidget(del_btn)
 
-        # Right: form
+        # Right: tab container
         right = QWidget()
         rv = QVBoxLayout(right)
         rv.setContentsMargins(0, 0, 0, 0)
         hdr2 = QLabel("ADD / EDIT DEVICE")
         hdr2.setObjectName("sectionHeader")
         rv.addWidget(hdr2)
+
+        # Tab widget: Details (form) + SSH Keys
+        self._tab_widget = QTabWidget()
+
+        # Details tab — existing form
+        details_tab = QWidget()
+        details_layout = QVBoxLayout(details_tab)
+        details_layout.setContentsMargins(0, 8, 0, 0)
         self.form = DeviceFormWidget()
-        rv.addWidget(self.form)
-        rv.addStretch()
+        details_layout.addWidget(self.form)
+        details_layout.addStretch()
+        self._tab_widget.addTab(details_tab, "Details")
+
+        # SSH Keys tab
+        ssh_tab = QWidget()
+        ssh_layout = QVBoxLayout(ssh_tab)
+        ssh_layout.setContentsMargins(0, 8, 0, 0)
+
+        self._ssh_table = make_table(["Key Type", "Fingerprint", "Added"])
+        ssh_layout.addWidget(self._ssh_table)
+
+        self._ssh_empty_label = QLabel("No stored host keys for this device.")
+        self._ssh_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._ssh_empty_label.setStyleSheet("color: #6B7280;")
+        ssh_layout.addWidget(self._ssh_empty_label)
+        self._ssh_empty_label.setVisible(False)
+
+        del_key_btn = QPushButton("DELETE SELECTED KEY")
+        del_key_btn.setObjectName("dangerBtn")
+        del_key_btn.clicked.connect(self._delete_host_key)
+        ssh_layout.addWidget(del_key_btn)
+
+        self._tab_widget.addTab(ssh_tab, "SSH Keys")
+        rv.addWidget(self._tab_widget)
 
         splitter.addWidget(left)
         splitter.addWidget(right)
