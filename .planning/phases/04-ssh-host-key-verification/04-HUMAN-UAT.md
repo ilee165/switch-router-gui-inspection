@@ -3,12 +3,12 @@ status: partial
 phase: 04-ssh-host-key-verification
 source: [04-VERIFICATION.md]
 started: 2026-05-30T04:10:00Z
-updated: 2026-05-30T04:10:00Z
+updated: 2026-05-31T12:00:00Z
 ---
 
 ## Current Test
 
-[awaiting human testing]
+[testing paused — 8/8 items outstanding — resume after GNS3 lab setup]
 
 ## Tests
 
