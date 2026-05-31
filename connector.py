@@ -251,10 +251,14 @@ def _connect_with_policy(netmiko_kwargs: dict, verifier_fn) -> ConnectHandler:
 def get_interfaces(device: dict, session_key: bytes, verifier_fn=None) -> dict:
     """Return structured interface data via Genie, TextFSM, or raw CLI.
 
-    Note: the Genie path (Linux/Mac only) uses pyATS's own SSH stack and does not
-    support RemoteInHostKeyPolicy. Host key verification applies to the Netmiko path only.
+    The Genie path uses pyATS's own SSH transport which cannot be injected with
+    RemoteInHostKeyPolicy. When verifier_fn is provided, Genie is skipped so that
+    host key verification is always enforced via the Netmiko path.
     """
-    if GENIE_AVAILABLE:
+    # Genie path has no host key verification mechanism (pyATS uses its own SSH
+    # transport -- RemoteInHostKeyPolicy cannot be injected). Skip Genie when a
+    # verifier_fn is provided so that host key verification is always enforced.
+    if GENIE_AVAILABLE and verifier_fn is None:
         result = _genie_fetch(device, "show interfaces", session_key)
         if result is not None:
             return {"source": "genie", "data": result}
@@ -267,7 +271,8 @@ def get_interfaces(device: dict, session_key: bytes, verifier_fn=None) -> dict:
 
 
 def get_routing_table(device: dict, session_key: bytes, verifier_fn=None) -> dict:
-    if GENIE_AVAILABLE:
+    # Genie path skipped when verifier_fn is provided -- see get_interfaces for detail.
+    if GENIE_AVAILABLE and verifier_fn is None:
         result = _genie_fetch(device, "show ip route", session_key)
         if result is not None:
             return {"source": "genie", "data": result}
@@ -280,7 +285,8 @@ def get_routing_table(device: dict, session_key: bytes, verifier_fn=None) -> dic
 
 
 def get_bgp_neighbors(device: dict, session_key: bytes, verifier_fn=None) -> dict:
-    if GENIE_AVAILABLE:
+    # Genie path skipped when verifier_fn is provided -- see get_interfaces for detail.
+    if GENIE_AVAILABLE and verifier_fn is None:
         result = _genie_fetch(device, "show bgp all neighbors", session_key)
         if result is not None:
             return {"source": "genie", "data": result}
@@ -293,7 +299,8 @@ def get_bgp_neighbors(device: dict, session_key: bytes, verifier_fn=None) -> dic
 
 
 def get_ospf_neighbors(device: dict, session_key: bytes, verifier_fn=None) -> dict:
-    if GENIE_AVAILABLE:
+    # Genie path skipped when verifier_fn is provided -- see get_interfaces for detail.
+    if GENIE_AVAILABLE and verifier_fn is None:
         result = _genie_fetch(device, "show ip ospf neighbor", session_key)
         if result is not None:
             return {"source": "genie", "data": result}
@@ -306,7 +313,8 @@ def get_ospf_neighbors(device: dict, session_key: bytes, verifier_fn=None) -> di
 
 
 def get_arp_table(device: dict, session_key: bytes, verifier_fn=None) -> dict:
-    if GENIE_AVAILABLE:
+    # Genie path skipped when verifier_fn is provided -- see get_interfaces for detail.
+    if GENIE_AVAILABLE and verifier_fn is None:
         result = _genie_fetch(device, "show ip arp", session_key)
         if result is not None:
             return {"source": "genie", "data": result}
@@ -319,7 +327,8 @@ def get_arp_table(device: dict, session_key: bytes, verifier_fn=None) -> dict:
 
 
 def get_mac_table(device: dict, session_key: bytes, verifier_fn=None) -> dict:
-    if GENIE_AVAILABLE:
+    # Genie path skipped when verifier_fn is provided -- see get_interfaces for detail.
+    if GENIE_AVAILABLE and verifier_fn is None:
         result = _genie_fetch(device, "show mac address-table", session_key)
         if result is not None:
             return {"source": "genie", "data": result}
