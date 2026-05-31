@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import logging
 
 import paramiko
 from netmiko import ConnectHandler, NetmikoTimeoutException, NetmikoAuthenticationException
+
+_log = logging.getLogger(__name__)
 
 # ── DB import boundary (audit checklist item from 04-02 plan) ──────────────────
 # connector.py MAY import pure data/crypto helpers from db.py.
@@ -200,7 +203,15 @@ def _genie_fetch(device: dict, cmd: str, session_key: bytes) -> dict | None:
         dev = tb.devices[device["name"]]
         dev.connect(log_stdout=False, learn_hostname=True)
         return dev.parse(cmd)
-    except Exception:
+    except Exception as exc:
+        # Log at DEBUG so credential decryption failures and Genie parse errors are
+        # visible in application logs rather than silently falling through to Netmiko.
+        # Without this, a "Credential decryption failed" ValueError is swallowed here
+        # and the user sees a confusing Netmiko auth error with no trace of the root cause.
+        _log.debug(
+            "Genie fetch failed for %s (%s), falling back to Netmiko: %s",
+            device.get("hostname", "?"), cmd, exc,
+        )
         return None
     finally:
         if dev is not None:
