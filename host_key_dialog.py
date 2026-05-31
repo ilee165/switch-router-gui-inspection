@@ -198,7 +198,7 @@ class HostKeyVerifier(QObject):
 
         elif result == "update_key":
             try:
-                db.update_host_key(
+                rows_updated = db.update_host_key(
                     device_id=device_id,
                     hostname=hostname,
                     port=port,
@@ -206,6 +206,20 @@ class HostKeyVerifier(QObject):
                     fingerprint=fingerprint,
                     key_blob=key_blob,
                 )
+                if rows_updated == 0:
+                    # The stored row was deleted between the dialog being shown
+                    # and the user clicking "Update Key" (e.g., removed via the
+                    # SSH Keys tab in another window). Fall back to store_host_key
+                    # to insert a fresh row rather than silently trusting an
+                    # unupdated key.
+                    db.store_host_key(
+                        device_id=device_id,
+                        hostname=hostname,
+                        port=port,
+                        key_type=key_type,
+                        fingerprint=fingerprint,
+                        key_blob=key_blob,
+                    )
                 # Remap to "always_trust" only when the DB write succeeded.
                 # RemoteInHostKeyPolicy only understands accept_once / always_trust / reject.
                 result = "always_trust"

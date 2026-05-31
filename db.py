@@ -426,15 +426,18 @@ def get_host_key(*, device_id: int, hostname: str, port: int,
 
 
 def update_host_key(*, device_id: int, hostname: str, port: int,
-                    key_type: str, fingerprint: str, key_blob: str) -> None:
+                    key_type: str, fingerprint: str, key_blob: str) -> int:
     """Replace fingerprint and key_blob for an existing host key row.
 
     This is the "Update Key" action from the changed-key warning dialog (D-05).
     The added_at column is reset to CURRENT_TIMESTAMP to record when the key
     was last verified — useful for audit and for detecting stale trust entries.
 
-    If no matching row exists (0 rows updated) this is a no-op. Callers that
-    are unsure whether the row exists should use store_host_key instead.
+    Returns the number of rows updated (1 on success, 0 if no matching row).
+    Callers must check the return value: 0 means the row was deleted between
+    the dialog being shown and the user clicking "Update Key". In that case,
+    use store_host_key() to insert a fresh row rather than silently trusting
+    an unupdated key.
 
     Args:
         device_id:   Foreign key into devices.id.
@@ -443,14 +446,18 @@ def update_host_key(*, device_id: int, hostname: str, port: int,
         key_type:    SSH key algorithm string.
         fingerprint: New SHA256 fingerprint string.
         key_blob:    New base64-encoded server public key blob.
+
+    Returns:
+        int: 1 if the row was updated, 0 if no matching row was found.
     """
     with get_conn() as conn:
-        conn.execute(
+        cur = conn.execute(
             """UPDATE host_keys
                SET fingerprint = ?, key_blob = ?, added_at = CURRENT_TIMESTAMP
                WHERE device_id = ? AND hostname = ? AND port = ? AND key_type = ?""",
             (fingerprint, key_blob, device_id, hostname, port, key_type),
         )
+        return cur.rowcount  # 0 if no matching row; 1 if updated
 
 
 def delete_host_key(*, key_id: int) -> None:
