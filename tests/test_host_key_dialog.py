@@ -132,7 +132,8 @@ def test_changed_key_update_key():
 def test_verify_silent_reconnect():
     """Known matching key_blob must return 'accept_once' without emitting signal."""
     verifier = HostKeyVerifier()
-    verifier.device_id = _DEV_ID
+    # device_id is now a required keyword-only parameter on verify_host_key(),
+    # not a shared instance attribute.  Pass it explicitly at each call site.
 
     stored_row = {
         "device_id": _DEV_ID, "hostname": _HOST, "port": _PORT,
@@ -148,6 +149,7 @@ def test_verify_silent_reconnect():
 
     with mock.patch.object(hkd.db, "get_host_key", return_value=stored_row):
         result = verifier.verify_host_key(
+            device_id=_DEV_ID,
             hostname=_HOST, port=_PORT, key_type=_KEY_TYPE,
             fingerprint=_FP, key_blob=_BLOB,
         )
@@ -161,9 +163,9 @@ def test_verify_silent_reconnect():
 
 def test_verify_timeout_rejects():
     """If threading.Event.wait() times out (returns False), must return 'reject'
-    and clear self._pending."""
+    and clear self._pending entry for this thread."""
     verifier = HostKeyVerifier()
-    verifier.device_id = _DEV_ID
+    # device_id is now a required keyword-only parameter -- no instance attribute.
 
     # get_host_key returns None → situation = "new" → signal emitted → we wait
     with mock.patch.object(hkd.db, "get_host_key", return_value=None):
@@ -177,6 +179,7 @@ def test_verify_timeout_rejects():
         threading.Event.wait = instant_timeout
         try:
             result = verifier.verify_host_key(
+                device_id=_DEV_ID,
                 hostname=_HOST, port=_PORT, key_type=_KEY_TYPE,
                 fingerprint=_FP, key_blob=_BLOB,
             )
@@ -184,7 +187,9 @@ def test_verify_timeout_rejects():
             threading.Event.wait = original_wait   # always restore
 
     assert result == "reject", f"Expected 'reject' on timeout, got '{result}'"
-    assert verifier._pending is None, "_pending must be cleared after verify_host_key"
+    # _pending is dict[int, dict] -- after verify_host_key pops the tid entry it
+    # becomes an empty dict (not None, which was the old single-slot API).
+    assert verifier._pending == {}, "_pending must be empty dict after verify_host_key"
     print("Test 7 PASS — verify_host_key timeout → reject, _pending cleared")
 
 
@@ -194,17 +199,23 @@ def test_verify_always_trust_calls_store():
     """When _pending result is 'always_trust', db.store_host_key must be called
     with correct keyword-only arguments."""
     verifier = HostKeyVerifier()
-    verifier.device_id = _DEV_ID
+    # device_id is now a required keyword-only parameter -- no instance attribute.
 
     # Simulate the main thread setting the result immediately via threading.Event.
     # We do this by patching Event.wait to:
-    #   1. Set _pending["result"] = "always_trust"
+    #   1. Look up this thread's _pending entry by tid and set result="always_trust"
     #   2. Return True (as if the event fired)
+    # _pending is dict[int, dict] keyed by threading.get_ident() -- we must write
+    # to the nested record, not the top-level dict, to avoid a no-op.
     original_wait = threading.Event.wait
 
     def instant_accept(self_event, timeout=None):
-        # At this point verifier._pending is already set by verify_host_key.
-        verifier._pending["result"] = "always_trust"
+        # At this point verifier._pending[tid] is already set by verify_host_key.
+        tid = threading.get_ident()
+        with verifier._pending_lock:
+            record = verifier._pending.get(tid)
+        if record is not None:
+            record["result"] = "always_trust"
         return True
 
     with mock.patch.object(hkd.db, "get_host_key", return_value=None), \
@@ -213,6 +224,7 @@ def test_verify_always_trust_calls_store():
         threading.Event.wait = instant_accept
         try:
             result = verifier.verify_host_key(
+                device_id=_DEV_ID,
                 hostname=_HOST, port=_PORT, key_type=_KEY_TYPE,
                 fingerprint=_FP, key_blob=_BLOB,
             )
