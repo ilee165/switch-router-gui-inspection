@@ -131,12 +131,16 @@ def test_reject_path_leaves_no_trace(isolated_db, device_id):
 def test_cascade_delete_removes_host_keys(isolated_db, device_id):
     """delete_device() must remove associated host_keys rows in the same transaction.
 
-    PRAGMA foreign_keys is NOT enabled in get_conn(), so the REFERENCES
-    declaration on host_keys does not cascade automatically.  The explicit
-    DELETE FROM host_keys in delete_device() is the only guard.
+    db.py enables PRAGMA foreign_keys = ON in get_conn(), so SQLite enforces the
+    REFERENCES devices(id) constraint on host_keys. delete_device() explicitly
+    DELETEs host_keys rows first (belt-and-suspenders) before removing the device
+    row, ensuring both rows are gone atomically even on older SQLite builds where
+    FK cascade semantics vary by compile option.
 
-    This test would catch a regression where someone removes that explicit
-    DELETE — the host_keys rows would be orphaned and this assertion fails.
+    This test catches regressions where the explicit DELETE FROM host_keys is
+    removed -- without it, the FK constraint would block the device DELETE and
+    raise IntegrityError (or orphan the rows if PRAGMA foreign_keys is ever
+    inadvertently disabled).
     """
     db.store_host_key(
         device_id=device_id, hostname=_HOST, port=_PORT,
