@@ -134,13 +134,19 @@ def test_unexpected_return_treated_as_reject():
             _call_missing(policy)
 
 
-# ── Test 6: verifier_fn=None → standard ConnectHandler, no policy set ─────────
+# ── Test 6: verifier_fn=None → RuntimeError (fail-closed) ────────────────────
 
-def test_no_verifier_skips_policy():
-    """_connect_with_policy with verifier_fn=None must NOT set key_policy.
+def test_no_verifier_raises_runtime_error():
+    """_connect_with_policy with verifier_fn=None must raise RuntimeError (fail closed).
 
-    This guards against accidentally applying a broken RemoteInHostKeyPolicy
-    (with _verifier_fn=None) when no verifier has been wired yet.
+    The old behavior (returning a plain ConnectHandler) was a security bypass --
+    a MITM attacker could present any host key and the connection would proceed
+    without verification. The fix raises RuntimeError so no unverified connection
+    can be opened. Production code must always supply a verifier_fn; tests that
+    intentionally bypass verification must pass an explicit stub such as
+    ``lambda **kw: "accept_once"``.
+
+    See test_verifier_concurrency.py:test_fail_closed_connector for a parallel check.
     """
     fake_kwargs = {
         "device_type": "cisco_ios",
@@ -154,25 +160,8 @@ def test_no_verifier_skips_policy():
         "use_keys": False,
         "key_file": None,
     }
-
-    mock_conn = MagicMock()
-
-    with patch.object(connector, "ConnectHandler", return_value=mock_conn) as mock_ch:
-        result = _connect_with_policy(fake_kwargs, verifier_fn=None)
-
-    # ConnectHandler was called once with the kwargs (no auto_connect=False)
-    mock_ch.assert_called_once_with(**fake_kwargs)
-
-    # key_policy must NOT have been set on the connection object
-    assert not hasattr(mock_conn, "key_policy") or "key_policy" not in mock_conn.__dict__, (
-        "key_policy must not be set when verifier_fn is None"
-    )
-
-    # _open() must NOT have been called (standard path, auto_connect handles it)
-    mock_conn._open.assert_not_called()
-
-    # The returned object is the ConnectHandler mock
-    assert result is mock_conn
+    with pytest.raises(RuntimeError, match="Host key verification is required"):
+        _connect_with_policy(fake_kwargs, verifier_fn=None)
 
 
 # ── Structural checks ──────────────────────────────────────────────────────────
