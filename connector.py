@@ -241,7 +241,18 @@ def _connect_with_policy(netmiko_kwargs: dict, verifier_fn) -> ConnectHandler:
     port = netmiko_kwargs.get("port", 22)
     policy = RemoteInHostKeyPolicy(verifier_fn, port=port)
     conn = ConnectHandler(**netmiko_kwargs, auto_connect=False)
+    # Netmiko does not expose a public API for injecting a custom MissingHostKeyPolicy.
+    # We rely on two internal attributes that have been stable across Netmiko 4.x:
+    #   conn.key_policy  -- the Paramiko policy object applied during _open()
+    #   conn._open()     -- establishes the SSH transport without ConnectHandler's
+    #                       auto-connect (which would run before we can set the policy)
+    # If Netmiko changes these internals, the assert below catches it at connection
+    # time (fail-closed AttributeError) rather than silently bypassing key verification.
     conn.key_policy = policy
+    assert conn.key_policy is policy, (
+        "conn.key_policy assignment did not take effect -- check Netmiko version "
+        "compatibility. RemoteInHostKeyPolicy cannot enforce host key verification."
+    )
     conn._open()
     return conn
 
