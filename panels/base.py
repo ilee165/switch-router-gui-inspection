@@ -104,6 +104,12 @@ class BasePanel(QWidget):
         raise NotImplementedError
 
     def _start_worker(self, fn, *args):
+        # Prevent double-start: if a fetch is already running, ignore the new
+        # request. Without this guard, a rapid double-click creates two concurrent
+        # FetchWorker threads; both emit result and both re-enable the Fetch button
+        # via _on_done, potentially overwriting each other's table data.
+        if self._thread is not None and self._thread.isRunning():
+            return
         self._thread = QThread()
         self._worker = FetchWorker(fn, *args)
         self._worker.moveToThread(self._thread)
