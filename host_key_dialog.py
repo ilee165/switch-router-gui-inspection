@@ -286,8 +286,15 @@ class HostKeyVerifier(QObject):
             record["result"] = "reject"
 
         finally:
-            # Always unblock the worker — a hanging worker is worse than a reject.
-            record["event"].set()
+            # Always unblock the worker — even if dialog construction failed.
+            # threading.Event.set() is idempotent: if the worker already timed out
+            # (event.wait returned False and the worker popped its own record), this
+            # set() operates on the stale local reference and is a harmless no-op.
+            # The guard below also prevents AttributeError if record is None, although
+            # the early return at line 243 ensures we never reach this finally block
+            # with record=None -- it is here for defensive clarity.
+            if record is not None:
+                record["event"].set()
 
 
 # ── FirstConnectDialog (SSH-01) ───────────────────────────────────────────────
